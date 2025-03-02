@@ -1,2 +1,4 @@
 /__pycache__
 /venv
+.DS_Store
+data_2025.csv

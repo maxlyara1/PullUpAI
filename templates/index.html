@@ -1,8 +1,9 @@
+<!-- templates/index.html -->
 <!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <title>Gym Interface - Dashboard</title>
+  <title>Gym Interface - Прогноз Подтягиваний</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
@@ -12,6 +13,7 @@
     .container { margin-top: 30px; }
     .chart { margin-bottom: 30px; }
     .btn-download { margin-bottom: 10px; }
+    .card-stat { background-color: #343a40; border: 1px solid #495057; } /* Стили для карточек статистики */
   </style>
 </head>
 <body>
@@ -23,34 +25,36 @@
     </button>
     <div class="collapse navbar-collapse" id="navbarContent">
       <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-        <li class="nav-item"><a class="nav-link" href="/about"><i class="fa-solid fa-info-circle"></i> About</a></li>
-        <li class="nav-item"><a class="nav-link" href="/history"><i class="fa-solid fa-history"></i> History</a></li>
-        <li class="nav-item"><a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#resetModal"><i class="fa-solid fa-arrows-rotate"></i> Reset Data</a></li>
-        <li class="nav-item"><a class="nav-link" href="/download"><i class="fa-solid fa-download"></i> Download CSV</a></li>
+        <li class="nav-item"><a class="nav-link" href="/about"><i class="fa-solid fa-info-circle"></i> О приложении</a></li>
+        <li class="nav-item"><a class="nav-link" href="/history"><i class="fa-solid fa-history"></i> История</a></li>
+        <li class="nav-item"><a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#resetModal"><i class="fa-solid fa-arrows-rotate"></i> Сбросить данные</a></li>
+        <li class="nav-item"><a class="nav-link" href="/download"><i class="fa-solid fa-download"></i> Скачать CSV</a></li>
       </ul>
       <form class="d-flex" method="get" action="/">
         <select name="degree" class="form-select me-2" onchange="this.form.submit()">
-          <option value="1" {% if selected_degree == 1 %}selected{% endif %}>Linear Regression</option>
-          <option value="2" {% if selected_degree == 2 %}selected{% endif %}>Polynomial (Degree 2)</option>
-          <option value="3" {% if selected_degree == 3 %}selected{% endif %}>Polynomial (Degree 3)</option>
+          <option value="1" {% if selected_degree == 1 %}selected{% endif %}>Линейная регрессия</option>
+          <option value="2" {% if selected_degree == 2 %}selected{% endif %}>Полиномиальная (2 степень)</option>
+          <option value="3" {% if selected_degree == 3 %}selected{% endif %}>Полиномиальная (3 степень)</option>
         </select>
       </form>
       <button id="toggleTheme" class="btn btn-outline-light ms-2"><i class="fa-solid fa-moon"></i></button>
     </div>
   </div>
 </nav>
+
 <div class="container">
-  <h1 class="mb-4 text-center">Pull-up Progress Forecast</h1>
+  <h1 class="mb-4 text-center">Прогноз Прогресса в Подтягиваниях</h1>
+
   <div class="row">
     <div class="col-md-12">
-      <h3>Data for 2025</h3>
+      <h3>Данные за 2025 год</h3>
       <table class="table table-dark table-striped">
         <thead>
           <tr>
             <th>#</th>
-            <th>Date</th>
-            <th>Avg Pull-ups</th>
-            <th>Action</th>
+            <th>Дата</th>
+            <th>Среднее число подтягиваний</th>
+            <th>Действие</th>
           </tr>
         </thead>
         <tbody>
@@ -66,79 +70,91 @@
       </table>
     </div>
   </div>
+
   <div class="row mb-4">
     <div class="col-md-6">
-      <h3>Add New Data</h3>
+      <h3>Добавить Новые Данные</h3>
       <form method="post" action="/add">
         <div class="mb-3">
-          <label for="date" class="form-label">Date</label>
+          <label for="date" class="form-label">Дата</label>
           <input type="date" id="date" name="date" class="form-control" value="2025-01-14" required>
         </div>
         <div class="mb-3">
-          <label for="avg_pullups" class="form-label">Avg Pull-ups</label>
+          <label for="avg_pullups" class="form-label">Среднее число подтягиваний</label>
           <input type="number" step="0.1" id="avg_pullups" name="avg_pullups" class="form-control" value="0.0" min="0" required>
         </div>
-        <button type="submit" class="btn btn-primary w-100"><i class="fa-solid fa-plus"></i> Add Data</button>
+        <button type="submit" class="btn btn-primary w-100"><i class="fa-solid fa-plus"></i> Добавить данные</button>
       </form>
     </div>
+
     <div class="col-md-6">
-      <div class="card bg-secondary text-white mb-3">
+      <div class="card card-stat text-white mb-3">
         <div class="card-body">
-          <h5 class="card-title">Statistics</h5>
+          <h5 class="card-title">Статистика</h5>
           <p class="card-text">{{ mae_2021 }}</p>
+          <p class="card-text">{{ r2_2021 }}</p>
           <p class="card-text">{{ mae_2025 }}</p>
+          <p class="card-text">{{ r2_2025 }}</p>
           <p class="card-text">{{ forecast_improvement }}</p>
         </div>
       </div>
     </div>
   </div>
+
   <div class="chart">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <h3>Chart 1</h3>
-      <button class="btn btn-outline-light btn-download" onclick="downloadChart('chart1')"><i class="fa-solid fa-download"></i> Download</button>
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h3>График 1</h3>
+        <button class="btn btn-outline-light btn-download" onclick="downloadChart('chart1')"><i class="fa-solid fa-download"></i> Скачать</button>
+      </div>
+      <div id="chart1-container">{{ chart1 | safe }}</div>
     </div>
-    <div id="chart1-container">{{ chart1 | safe }}</div>
-  </div>
-  <div class="chart">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <h3>Chart 2</h3>
-      <button class="btn btn-outline-light btn-download" onclick="downloadChart('chart2')"><i class="fa-solid fa-download"></i> Download</button>
+
+    <div class="chart">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h3>График 2</h3>
+        <button class="btn btn-outline-light btn-download" onclick="downloadChart('chart2')"><i class="fa-solid fa-download"></i> Скачать</button>
+      </div>
+      <div id="chart2-container">{{ chart2 | safe }}</div>
     </div>
-    <div id="chart2-container">{{ chart2 | safe }}</div>
-  </div>
 </div>
+
+<!-- Модальное окно подтверждения сброса данных -->
 <div class="modal fade" id="resetModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content bg-dark text-white">
       <div class="modal-header">
-        <h5 class="modal-title">Confirm Data Reset</h5>
+        <h5 class="modal-title">Подтверждение Сброса Данных</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        Are you sure you want to reset all data? This action cannot be undone.
+        Вы уверены, что хотите сбросить все данные? Это действие нельзя отменить.
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <a href="/reset" class="btn btn-danger">Reset Data</a>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+        <a href="/reset" class="btn btn-danger">Сбросить данные</a>
       </div>
     </div>
   </div>
 </div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.plot.ly/plotly-2.18.2.min.js"></script>
 <script>
-function downloadChart(containerId) {
-  let container = document.getElementById(containerId + "-container").querySelector('.plotly-graph-div');
-  if(container){
-    Plotly.downloadImage(container, {format: 'png', filename: containerId});
+  // Функция для скачивания графиков
+  function downloadChart(containerId) {
+    let container = document.getElementById(containerId + "-container").querySelector('.plotly-graph-div');
+    if (container) {
+      Plotly.downloadImage(container, { format: 'png', filename: containerId });
+    }
   }
-}
-document.getElementById("toggleTheme").addEventListener("click", function(){
-  document.body.classList.toggle("bg-dark");
-  document.body.classList.toggle("bg-light");
-  document.body.classList.toggle("text-white");
-  document.body.classList.toggle("text-dark");
-});
+
+  // Переключение темы
+  document.getElementById("toggleTheme").addEventListener("click", function() {
+    document.body.classList.toggle("bg-dark");
+    document.body.classList.toggle("bg-light");
+    document.body.classList.toggle("text-white");
+    document.body.classList.toggle("text-dark");
+  });
 </script>
 </body>
 </html>
