@@ -1,0 +1,1036 @@
+/* frontend/src/styles/App.module.css */
+
+/* CSS Variables (Light Theme - default) */
+:root {
+  --primary-color: #3182ce;  /* Синий (основной) */
+  --secondary-color: #edf2f7; /* Светло-серый (вторичный) */
+  --accent-color: #38a169;  /* Зелёный (акцент) */
+  --text-color: #333;       /* Тёмно-серый (текст) */
+  --background-color: #fff;  /* Белый (фон) */
+  --border-color: #ddd;     /* Светло-серый (рамки) */
+  --font-family-headings: 'Inter', sans-serif;
+  --font-family-body: 'Open Sans', sans-serif;
+  --border-radius: 6px;
+  --box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  --transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out, border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out, transform 0.2s ease-in-out;
+  /* Размеры шрифтов */
+  --font-size-base: 13px;
+  --font-size-sm: 12px;
+  --font-size-lg: 14px;
+  --font-size-xl: 16px;
+  --font-size-2xl: 20px;
+  /* Жирность шрифта */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  /* Цвета для кнопок (светлая тема) */
+  --button-bg-color: #38a169; /* Зеленый фон */
+  --button-text-color: #fff;    /* Белый текст */
+  --button-hover-bg-color: #2d8651; /* Темно-зеленый при наведении */
+  --button-disabled-bg-color: #cccccc; /* Серый для отключенных */
+}
+
+/* Dark Theme */
+.darkMode {
+  --primary-color: #60a5fa;  /* Более яркий синий */
+  --secondary-color: #1e293b;
+  --accent-color: #38bdf8;   /* Яркий голубой */
+  --text-color: #f8fafc;     /* Более чистый белый */
+  --background-color: #0f172a;
+  --border-color: #334155;
+  --hover-color: #1e293b;
+  --success-color: #34d399;  /* Яркий зеленый */
+  --error-color: #f43f5e;    /* Яркий красный */
+  --warning-color: #fbbf24;  /* Яркий оранжевый */
+  --box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  /* Цвета для кнопок (темная тема) */
+  --button-bg-color: #48bb78;    /* Светло-зеленый фон */
+  --button-text-color: #1a202c;    /* Темно-серый текст */
+  --button-hover-bg-color: #38a169; /* Зеленый при наведении */
+  --button-disabled-bg-color: #4a5568; /* Серый для отключенных */
+}
+
+/* Общие стили */
+body {
+  font-family: var(--font-family-body);
+  background-color: var(--secondary-color);
+  color: var(--text-color);
+  line-height: 1.5;
+  margin: 0;
+  font-size: var(--font-size-base);
+  transition: background-color 0.5s ease-in-out;
+}
+
+.container {
+  min-height: 100vh;
+  padding: 10px 24px;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  transition: all 0.3s ease;
+  max-width: 1800px;
+  margin: 0 auto;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  min-width: max-content;
+}
+
+.icon {
+  color: var(--accent-color);
+  font-size: 1.3em;
+}
+
+.subtitle {
+  margin-top: 0;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--primary-color);
+  padding-bottom: 0.4rem;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-color);
+  flex-shrink: 0; /* Чтобы заголовок не сжимался */
+}
+
+.subtitle::before {
+  content: "🏆";
+  font-size: 20px;
+}
+
+/* Улучшенные стили для контейнера сетки */
+.gridContainer {
+  display: grid;
+  grid-template-columns: minmax(340px, 1fr) minmax(540px, 2fr);
+  gap: 14px;
+  max-width: 100%;
+  margin: 0 auto;
+  padding-top: 10px;
+  min-height: calc(100vh - 80px);
+  align-items: stretch; /* Растягиваем колонки на одинаковую высоту */
+}
+
+/* Улучшенные стили сайдбара */
+.sidebar {
+  background-color: var(--secondary-color);
+  border-radius: var(--border-radius);
+  padding: 14px;
+  height: fit-content;
+  box-shadow: var(--box-shadow);
+  border: 1px solid var(--border-color);
+  position: sticky;
+  top: 16px;
+}
+
+.mainContent {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: 100%; /* Обеспечиваем заполнение всей высоты */
+}
+
+.chartsColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  max-width: 100%;
+  height: 100%; /* Обеспечиваем заполнение всей высоты */
+}
+
+.tableWrapper {
+  background-color: var(--secondary-color);
+  border-radius: var(--border-radius);
+  padding: 16px;
+  box-shadow: var(--box-shadow);
+  border: 1px solid var(--border-color);
+  margin-bottom: 14px;
+  overflow: hidden;
+  animation: fadeIn 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Добавим растяжение для последней таблицы */
+.mainContent > .tableWrapper:last-child {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Стили таблиц (без composes, который не работает между файлами) */
+.table,
+.achievementsTable {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--font-size-base);
+  margin-bottom: 14px;
+}
+
+.table th,
+.achievementsTable th {
+  font-weight: var(--font-weight-semibold);
+  padding: 10px 14px;
+  text-align: center;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--background-color);
+  color: var(--text-color);
+  opacity: 0.95;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  line-height: 1.3;
+  height: 44px; /* Фиксированная высота для заголовков */
+  vertical-align: middle;
+  font-size: 13px;
+}
+
+.table td,
+.achievementsTable td {
+  padding: 10px 14px;
+  text-align: center;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-color);
+  transition: background-color 0.2s ease, transform 0.2s ease;
+  line-height: 1.2;
+}
+
+.table tr:hover td,
+.achievementsTable tr:hover td {
+  background-color: var(--hover-color);
+  transform: translateX(4px);
+}
+
+.table tr:last-child td,
+.achievementsTable tr:last-child td {
+  border-bottom: none;
+}
+
+.table td:first-child,
+.achievementsTable td:first-child {
+  font-weight: var(--font-weight-semibold);
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+  min-width: 100px;
+}
+
+.table td:last-child,
+.achievementsTable td:last-child {
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+
+.chartWrapper {
+  background-color: var(--secondary-color);
+  border-radius: var(--border-radius);
+  padding: 16px;
+  box-shadow: var(--box-shadow);
+  border: 1px solid var(--border-color);
+  min-height: 500px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex: 1; /* Чтобы график растягивался и заполнял доступное пространство */
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-color);
+  opacity: 0.95;
+  margin-bottom: 4px;
+}
+
+.select {
+  background-color: var(--background-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 8px 12px;
+  font-size: 13px;
+  width: 100%;
+}
+
+.select:hover {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 1px var(--accent-color);
+}
+
+.errorMessage {
+  background-color: var(--error-color);
+  color: white;
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin: 16px 0;
+}
+
+.achievements {
+  width: 100%;
+}
+
+.buttonContainer {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--secondary-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.button:hover {
+  background-color: var(--hover-color);
+  border-color: var(--accent-color);
+}
+
+.buttonIcon {
+  font-size: 14px;
+}
+
+.loadingMessage {
+  text-align: center;
+  padding: 20px;
+  color: var(--text-color);
+}
+
+.themeToggle {
+  background-color: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.themeToggle:hover {
+  background-color: var(--hover-color);
+  border-color: var(--accent-color);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background-color: var(--header-background);
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 2px;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  flex: 1;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: max-content;
+}
+
+.headerControls {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0;
+  margin: 0 auto;
+}
+
+.controlGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  position: relative;
+  padding-right: 20px;
+}
+
+.controlGroup:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 20px;
+  width: 1px;
+  background-color: var(--border-color);
+  opacity: 0.9;
+}
+
+.controlGroup:has(.slider) {
+  flex: 1;
+  min-width: 150px;
+  max-width: 220px;
+}
+
+.controlLabel {
+  font-size: 13px;
+  color: var(--text-color);
+  opacity: 0.9;
+  white-space: nowrap;
+  font-weight: 500;
+  min-width: 55px;
+}
+
+.controlValue {
+  font-size: 13px;
+  color: var(--text-color);
+  font-weight: 500;
+  min-width: 28px;
+  text-align: right;
+}
+
+.controlSelect {
+  background-color: var(--secondary-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 5px 8px;
+  font-size: 13px;
+  min-width: 90px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.controlSelect:hover {
+  border-color: var(--accent-color);
+}
+
+/* Специфичные размеры для таблицы тренировок */
+.narrowTable {
+  max-width: 800px;
+}
+
+.dataInputWrapper {
+  max-width: 800px;
+}
+
+.dataInputWrapper .subtitle {
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+
+/* Add styles for dark mode input fields */
+input[type="text"],
+input[type="number"],
+input[type="date"]
+ {
+  background-color: var(--background-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  padding: 5px 8px;
+  border-radius: var(--border-radius);
+  font-family: var(--font-family-body);
+  font-size: 13px;
+
+  &:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(49, 130, 206, 0.3);
+  }
+
+  .darkMode & {
+    background-color: var(--secondary-color);
+    color: var(--text-color);
+    border-color: var(--border-color);
+
+    &:focus {
+      box-shadow: 0 0 0 2px rgba(66, 153, 225, 0.3);
+    }
+  }
+}
+
+/* Медиа-запросы для адаптивности */
+@media (max-width: 1400px) {
+  .gridContainer {
+    grid-template-columns: minmax(330px, 1fr) minmax(500px, 2fr);
+    gap: 12px;
+  }
+  
+  .container {
+    padding: 8px 20px;
+  }
+  
+  .header {
+    padding: 8px 12px;
+  }
+  
+  .headerLeft {
+    gap: 20px;
+  }
+  
+  .headerControls {
+    gap: 14px;
+  }
+}
+
+@media (min-width: 1600px) {
+  .container {
+    padding: 14px 32px;
+  }
+  
+  .gridContainer {
+    grid-template-columns: minmax(380px, 1fr) minmax(650px, 2fr);
+    gap: 16px;
+  }
+  
+  .title {
+    font-size: var(--font-size-2xl);
+  }
+  
+  body,
+  .table th,
+  .table td,
+  .achievementsTable th,
+  .achievementsTable td,
+  .explainerBox p {
+    font-size: var(--font-size-lg);
+  }
+}
+
+@media (max-width: 1200px) {
+  .gridContainer {
+    grid-template-columns: 1fr;
+  }
+
+  .mainContent, .chartsColumn {
+    height: auto;
+  }
+  
+  .mainContent > .tableWrapper:last-child {
+    flex: 0 1 auto;
+    margin-bottom: 14px;
+  }
+  
+  .chartWrapper {
+    flex: 0 1 auto;
+  }
+
+  .header {
+    padding: 8px 12px;
+  }
+
+  .headerLeft {
+    gap: 16px;
+  }
+
+  .headerControls {
+    gap: 14px;
+  }
+
+  .controlGroup {
+    padding-right: 14px;
+  }
+}
+
+@media (max-width: 1000px) {
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .headerLeft {
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+  }
+
+  .headerControls {
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+    width: 100%;
+  }
+
+  .controlGroup {
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 6px 12px;
+  }
+
+  .header {
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+  }
+
+  .headerControls {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .controlGroup {
+    width: 100%;
+  }
+
+  .controlSelect {
+    width: 100%;
+  }
+
+  .title {
+    font-size: 1.2rem;
+  }
+
+  .sidebar,
+  .tableWrapper,
+  .chartWrapper {
+    padding: 10px 12px;
+  }
+}
+
+.explainerBox {
+  background-color: var(--secondary-color);
+  border-radius: var(--border-radius);
+  padding: 16px;
+  box-shadow: var(--box-shadow);
+  border: 1px solid var(--border-color);
+  margin-bottom: 0;
+  font-size: 13px;
+  overflow-y: auto;
+  max-height: none; /* Убираем скролл */
+}
+
+.explainerBox h3 {
+  margin: 0 0 14px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--accent-color);
+  text-align: center;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 10px;
+  flex-shrink: 0; /* Чтобы заголовок не сжимался */
+}
+
+.explainerBox p {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-color);
+}
+
+/* Обновленные стили для пояснительной записки */
+.explainerSection {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed var(--border-color);
+}
+
+.explainerSection:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.explainerSection h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+/* Двухколоночная структура */
+.twoColumns {
+  display: flex;
+  gap: 20px;
+}
+
+.column {
+  flex: 1;
+}
+
+.colorLine {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+  line-height: 1.4;
+  font-size: 12.5px;
+}
+
+.colorDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.blueDot {
+  background-color: #3182CE;
+}
+
+.greenDot {
+  background-color: #38A169;
+}
+
+.purpleDot {
+  background-color: #805AD5;
+}
+
+.redDot {
+  background-color: #E53E3E;
+}
+
+.lineIcon {
+  display: inline-block;
+  margin-right: 6px;
+  font-weight: bold;
+  color: var(--text-color);
+  width: 10px;
+  text-align: center;
+}
+
+.factorsList {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+}
+
+.factorsList li {
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.infoGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 16px;
+  margin-bottom: 10px;
+  font-size: 12.5px;
+}
+
+.infoGrid div {
+  display: flex;
+  align-items: center;
+  line-height: 1.4;
+}
+
+.tip {
+  font-size: 12.5px;
+  background-color: rgba(49, 130, 206, 0.08);
+  padding: 8px 12px;
+  border-radius: 4px;
+  border-left: 3px solid var(--primary-color);
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+
+/* Медиа-запросы для адаптивности пояснительной записки */
+@media (min-width: 1400px) {
+  .explainerBox {
+    padding: 18px 20px;
+  }
+  
+  .explainerBox h3 {
+    font-size: 18px;
+    margin-bottom: 16px;
+  }
+  
+  .explainerBox h4 {
+    font-size: 15px;
+    margin-bottom: 10px;
+  }
+  
+  .explainerBox p, 
+  .colorLine,
+  .factorsList li, 
+  .infoGrid div,
+  .tip {
+    font-size: 13.5px;
+  }
+  
+  .colorDot {
+    width: 9px;
+    height: 9px;
+  }
+}
+
+@media (max-width: 768px) {
+  .twoColumns {
+    flex-direction: column;
+    gap: 14px;
+  }
+  
+  .explainerBox {
+    padding: 14px;
+  }
+  
+  .infoGrid {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  
+  .explainerSection {
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+  }
+}
+
+.explainerBox .highlight {
+  color: var(--accent-color);
+  font-weight: 500;
+}
+
+/* Новые стили для структурированной пояснительной записки */
+.explainerSection {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed var(--border-color);
+}
+
+.explainerSection:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.explainerSection h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.colorLine {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+.colorDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 8px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.blueDot {
+  background-color: #3182CE;
+}
+
+.greenDot {
+  background-color: #38A169;
+}
+
+.purpleDot {
+  background-color: #805AD5;
+}
+
+.redDot {
+  background-color: #E53E3E;
+}
+
+.lineIcon {
+  display: inline-block;
+  margin-right: 8px;
+  font-weight: bold;
+  color: var(--text-color);
+  width: 10px;
+  text-align: center;
+}
+
+.factorsList, .tipsList {
+  margin: 0;
+  padding-left: 24px;
+}
+
+.factorsList li, .tipsList li {
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+/* Медиа-запросы для адаптивности пояснительной записки */
+@media (min-width: 1400px) {
+  .explainerBox {
+    padding: 20px 24px;
+    font-size: 14px;
+  }
+  
+  .explainerBox h3 {
+    font-size: 20px;
+  }
+  
+  .explainerBox h4 {
+    font-size: 16px;
+  }
+  
+  .explainerBox p, 
+  .factorsList li, 
+  .tipsList li {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 768px) {
+  .explainerBox {
+    padding: 14px;
+    max-height: none;
+  }
+  
+  .explainerBox h3 {
+    font-size: 16px;
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+  }
+  
+  .explainerSection {
+    margin-bottom: 16px;
+    padding-bottom: 14px;
+  }
+  
+  .explainerBox h4 {
+    margin-bottom: 10px;
+  }
+}
+
+.tableFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+}
+
+.tableButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--accent-color);
+  color: white;
+  border: none;
+  border-radius: var(--border-radius);
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+
+.tableButton:hover {
+  background-color: var(--button-hover-bg-color);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.buttonIcon {
+  font-size: 13px;
+}
+
+/* Добавляем отдельные стили для таблицы достижений */
+.achievementsTable {
+  table-layout: auto; /* Автоматический макет таблицы вместо фиксированного */
+  border-collapse: collapse;
+  width: 100%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-radius: var(--border-radius);
+  margin-bottom: 0;
+  flex: 1; /* Растягиваем таблицу на доступное пространство */
+  display: table; /* Возвращаем стандартное поведение таблицы */
+}
+
+.achievementsTable th {
+  background-color: var(--secondary-color);
+  font-weight: 600;
+  text-transform: none;
+  height: auto;
+  padding: 12px 8px;
+}
+
+.achievementsTable td {
+  padding: 12px 8px;
+  overflow: visible;
+  word-wrap: normal;
+  white-space: normal;
+}
+
+.achievementsTable tr:hover td {
+  background-color: var(--hover-color);
+  transform: none; /* Отключаем сдвиг при наведении для этой таблицы */
+}
+
+.achievementsTable tr {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.achievementsTable tr:last-child {
+  border-bottom: none;
+}
+
+.achievementsTable th:first-child,
+.achievementsTable td:first-child {
+  width: auto; /* Автоматическая ширина */
+  min-width: 70px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.achievementsTable td:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.achievementsTable td:first-child span {
+  display: inline-block;
+}
+
+/* Удаляем фиксированные размеры для остальных колонок */
+.achievementsTable th:nth-child(2),
+.achievementsTable td:nth-child(2),
+.achievementsTable th:nth-child(3),
+.achievementsTable td:nth-child(3),
+.achievementsTable th:nth-child(4),
+.achievementsTable td:nth-child(4) {
+  width: auto;
+}

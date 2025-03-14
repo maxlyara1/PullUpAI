@@ -1,0 +1,49 @@
+/* frontend/src/styles/Explanation.module.css */
+
+.container {
+    max-width: 800px; /* Or whatever width you prefer */
+    margin: 2rem auto;
+    padding: 2rem;
+    background-color: var(--background-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    color: var(--text-color);
+    font-family: var(--font-family-body);
+    line-height: 1.6;
+}
+
+.title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    color: var(--primary-color);
+    text-align: center;
+    font-family: var(--font-family-headings);
+}
+
+.subtitle {
+    font-size: 1.8rem;
+    font-weight: 600;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    color: var(--text-color);
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 0.5rem;
+}
+
+.section {
+    margin-bottom: 2rem;
+}
+
+.section p {
+    margin-bottom: 1rem;
+}
+
+.section ul {
+    margin-bottom: 1rem;
+    padding-left: 1.5rem; /* Add some indentation for lists */
+}
+
+.section li {
+    margin-bottom: 0.5rem;
+}

@@ -1,0 +1,31 @@
+/* frontend/src/components/WeightCategorySelector.module.css */
+
+.select {
+    padding: 6px 12px;
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-color);
+    font-size: 13px;
+    font-family: var(--font-family-body); /* Используем шрифт для основного текста */
+    background-color: var(--background-color);
+    color: var(--text-color);
+    width: 100px;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 5" fill="%2394a3b8"><path d="M0 0l4 5 4-5z"/></svg>');
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 8px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.select:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 2px rgba(49, 130, 206, 0.2);
+}
+
+.select:hover {
+    border-color: var(--accent-color);
+}

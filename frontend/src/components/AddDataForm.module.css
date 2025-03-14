@@ -1,0 +1,82 @@
+/* frontend/src/components/AddDataForm/AddDataForm.module.css */
+
+.form {
+  width: 100%;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.label {
+  font-size: 12px;
+  color: var(--text-color);
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+.input {
+  padding: 5px 8px;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border-color);
+  font-size: 13px;
+  height: 30px;
+  box-sizing: border-box;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 1px var(--accent-color);
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background-color: var(--accent-color);
+  color: white;
+  border: none;
+  border-radius: var(--border-radius);
+  padding: 0 12px;
+  font-size: 12px;
+  cursor: pointer;
+  height: 30px;
+  transition: all 0.2s ease;
+}
+
+.button:hover {
+  background-color: var(--button-hover-bg-color);
+  transform: translateY(-1px);
+}
+
+.buttonIcon {
+  font-size: 12px;
+}
+
+.error {
+  color: var(--error-color);
+  font-size: 11px;
+  margin-top: 6px;
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 768px) {
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .button {
+    margin-top: 4px;
+  }
+}

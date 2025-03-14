@@ -1,0 +1,205 @@
+/* DataTable.module.css */
+.tableWrapper {
+  overflow-x: auto;
+  width: 100%;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+}
+
+/* Используем общие переменные стилей без composes */
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--font-size-base);
+  margin-bottom: 14px;
+}
+
+.table th {
+  font-weight: var(--font-weight-semibold);
+  padding: 6px 8px;
+  text-align: center;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--secondary-color);
+  color: var(--text-color);
+  opacity: 0.95;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  font-size: 12px;
+}
+
+.table td {
+  padding: 6px 8px;
+  text-align: center;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-color);
+  font-size: 12px;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.table tr:hover td {
+  background-color: var(--hover-color);
+  transform: translateX(4px);
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.table td:first-child {
+  font-weight: var(--font-weight-semibold);
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+}
+
+.table td:last-child {
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+
+/* Остальные специфичные стили для таблицы данных */
+.actionCell {
+  width: 80px;
+  text-align: right;
+}
+
+.actionButton {
+  background: transparent;
+  border: none;
+  color: var(--text-color);
+  opacity: 0.7;
+  cursor: pointer;
+  padding: 3px 6px;
+  margin-left: 2px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.actionButton:hover {
+  opacity: 1;
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+:global(.darkMode) .actionButton:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.editButton {
+  color: var(--primary-color);
+}
+
+.deleteButton {
+  color: var(--error-color);
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 10px;
+  margin-bottom: 5px;
+  flex-wrap: wrap;
+}
+
+.paginationButton {
+  background: var(--background-color);
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
+  border-radius: 4px;
+  padding: 4px 8px;
+  min-width: 30px;
+  height: 28px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.paginationButton:hover:not([disabled]) {
+  background-color: var(--secondary-color);
+  border-color: var(--accent-color);
+  transform: translateY(-1px);
+}
+
+.paginationButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.currentPage {
+  background-color: var(--accent-color);
+  color: white;
+  border-color: var(--accent-color);
+}
+
+.currentPage:hover {
+  background-color: var(--accent-color) !important;
+  border-color: var(--accent-color) !important;
+}
+
+.noData {
+  text-align: center;
+  padding: 16px;
+  color: var(--text-color);
+  opacity: 0.7;
+  font-style: italic;
+}
+
+.editInput {
+  padding: 6px 10px;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border-color);
+  font-size: 13px;
+  font-family: var(--font-family-body);
+  background-color: var(--background-color);
+  color: var(--text-color);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.editInput:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(49, 130, 206, 0.2);
+}
+
+.numberCell {
+  text-align: right;
+}
+
+.button {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--text-color);
+  opacity: 0.8;
+  margin-right: 4px;
+}
+
+.button:hover {
+  opacity: 1;
+  color: var(--accent-color);
+}
+
+.buttonIcon {
+  font-size: 14px;
+}
+
+.button:last-child {
+  margin-right: 0;
+}
+
+.error {
+  color: var(--accent-color);
+  font-size: 13px;
+  text-align: center;
+  margin-top: 8px;
+  padding: 0 12px;
+}
