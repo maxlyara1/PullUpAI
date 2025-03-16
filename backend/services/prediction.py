@@ -20,8 +20,8 @@ from backend.models.training import TrainingData
 from functools import lru_cache
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logger.setLevel(logging.INFO)
+formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 ch = logging.StreamHandler()
 ch.setFormatter(formatter)
 logger.addHandler(ch)
@@ -86,9 +86,9 @@ def prepare_features(df: pd.DataFrame, sort_by_column: str = COL_DATE) -> pd.Dat
     
     # Заполняем пропуски в лагах: сначала последними доступными значениями (ffill),
     # потом, если остались пропуски в начале, заполняем следующими (bfill)
-    df[COL_LAG1] = df[COL_LAG1].fillna(method='ffill').fillna(method='bfill')
-    df[COL_LAG2] = df[COL_LAG2].fillna(method='ffill').fillna(method='bfill')
-    df[COL_LAG3] = df[COL_LAG3].fillna(method='ffill').fillna(method='bfill')
+    df[COL_LAG1] = df[COL_LAG1].ffill().bfill()
+    df[COL_LAG2] = df[COL_LAG2].ffill().bfill()
+    df[COL_LAG3] = df[COL_LAG3].ffill().bfill()
     
     # Абсолютное изменение: текущее значение - предыдущее
     df[COL_GROWTH] = df[COL_AVG_PULLUPS].diff().fillna(0)
@@ -228,9 +228,7 @@ def _prepare_data_for_regression(
     # Создаем признаки с помощью универсальной функции
     df_initial = prepare_features(df_initial)
 
-    # Выводим обучающий датафрейм для проверки
-    logger.info("\nTraining DataFrame:")
-    logger.info(f"\n{df_initial.to_string()}")
+    logger.info(f"Подготовлены данные для регрессии. Количество записей: {len(df_initial)}")
 
     return df_initial, start_date_2025, initial_year, predict_year
 
@@ -243,14 +241,10 @@ def _build_regression_model(initial_data_processed: pd.DataFrame) -> tuple:
 
     # Проверяем, есть ли модель в кэше
     if cache_key in MODEL_CACHE:
-        logger.info("Using cached regression model")
+        logger.info("Используется закешированная модель регрессии")
         return MODEL_CACHE[cache_key]
 
-    logger.info("Building new regression model")
-    
-    # Выводим данные для обучения
-    logger.info("\nTraining Data:")
-    logger.info(f"\n{initial_data_processed[FEATURE_COLUMNS + [COL_AVG_PULLUPS]].to_string()}")
+    logger.info("Создается новая модель регрессии")
     
     X_initial = initial_data_processed[FEATURE_COLUMNS].to_numpy()
     y_initial = initial_data_processed[COL_AVG_PULLUPS].to_numpy()
@@ -263,6 +257,7 @@ def _build_regression_model(initial_data_processed: pd.DataFrame) -> tuple:
     
     # Обучаем модель
     model.fit(X_initial, y_initial)
+    logger.info("Модель регрессии обучена успешно")
 
     # Сохраняем модель в кэш
     MODEL_CACHE[cache_key] = model
@@ -354,9 +349,7 @@ def _make_predictions(
     # Создаем признаки на основе исторических данных
     prepared_data = prepare_features(historical_data)
     
-    # Выводим данные для инференса
-    logger.info("\nInference Data (Initial):")
-    logger.info(f"\n{prepared_data.to_string()}")
+    logger.info(f"Начало прогнозирования на {len(predict_days)} дней")
     
     # Получаем начальные значения признаков
     current_avg, last_pullups, last_growth = _prepare_initial_features(prepared_data)
@@ -375,15 +368,7 @@ def _make_predictions(
         predicted_pullups.append(predicted_avg)
         inference_features.append(features)
     
-    # Выводим все входные признаки, использованные при инференсе
-    logger.info("\nInference Features Used:")
-    inference_df = pd.DataFrame(
-        inference_features,
-        columns=FEATURE_COLUMNS
-    )
-    inference_df["prediction"] = predicted_pullups
-    logger.info(f"\n{inference_df.to_string()}")
-    
+    logger.info(f"Прогноз выполнен. Количество точек прогноза: {len(predicted_pullups)}")
     return np.array(predicted_pullups)
 
 
