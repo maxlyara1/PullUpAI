@@ -43,7 +43,7 @@
 
 .table tr:hover td {
   background-color: var(--hover-color);
-  transform: translateX(4px);
+  transform: none;
 }
 
 .table tr:last-child td {

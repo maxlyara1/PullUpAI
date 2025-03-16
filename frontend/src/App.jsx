@@ -104,13 +104,21 @@ function App() {
             const result = await api.getPredictionData(weightCategory, forecastDays);
             setData(result.data_2025);
             // Парсим JSON-строки из бэкенда
-            setChart2Data(JSON.parse(result.chart2));
+            const chart2DataObj = JSON.parse(result.chart2);
+            
+            // Добавляем информацию о прогрессе в объект chart2Data
+            chart2DataObj.progress_type = result.progress_type;
+            chart2DataObj.growth_per_day = result.growth_per_day;
+            
+            setChart2Data(chart2DataObj);
             setAchievementDates(result.achievement_dates);
             setPullupStandards(result.pullup_standards);
             
             console.log('Updated standards for weight category:', weightCategory);
             console.log('Achievement dates:', result.achievement_dates);
             console.log('Pullup standards:', result.pullup_standards);
+            console.log('Progress type:', result.progress_type);
+            console.log('Growth per day:', result.growth_per_day);
 
             setError('');
         } catch (error) {
@@ -322,6 +330,8 @@ function App() {
                                                 xAxisLabel={chart2Data.xAxisLabel}
                                                 yAxisLabel={chart2Data.yAxisLabel}
                                                 darkMode={isDarkMode}
+                                                noUserData={chart2Data.noUserData || false}
+                                                message={chart2Data.message || ''}
                                             />
                                         </ErrorBoundary>
                                     </div>
@@ -379,6 +389,31 @@ function App() {
                                                 </div>
                                             </div>
                                         </div>
+                                        
+                                        {/* Блок с информацией о прогрессе пользователя */}
+                                        {chart2Data && chart2Data.progress_type && !chart2Data.noUserData && (
+                                            <div className={`${styles.explainerSection} ${styles.progressInfo}`}>
+                                                <h4>📈 Ваш прогресс</h4>
+                                                <div className={styles.progressDetails}>
+                                                    <div>
+                                                        <strong>Тип прогресса:</strong> 
+                                                        <span className={
+                                                            chart2Data.progress_type === "Быстрый" ? styles.fastProgress :
+                                                            chart2Data.progress_type === "Средний" ? styles.averageProgress :
+                                                            chart2Data.progress_type === "Медленный" ? styles.slowProgress :
+                                                            styles.verySlowProgress
+                                                        }>
+                                                            {chart2Data.progress_type}
+                                                        </span>
+                                                    </div>
+                                                    {chart2Data.growth_per_day !== undefined && (
+                                                        <div>
+                                                            <strong>Прирост в день:</strong> {chart2Data.growth_per_day.toFixed(3)} подтягиваний
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </>
                             )}

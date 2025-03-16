@@ -55,7 +55,7 @@ const CustomTooltip = ({ active, payload, label, theme }) => {
   );
 };
 
-const Chart = ({ data, standards, title, xAxisLabel, yAxisLabel, darkMode = true }) => {
+const Chart = ({ data, standards, title, xAxisLabel, yAxisLabel, darkMode = true, noUserData = false, message = '' }) => {
   const theme = {
     backgroundColor: darkMode ? '#1e293b' : '#ffffff',
     textColor: darkMode ? '#f8fafc' : '#1e293b',
@@ -74,6 +74,28 @@ const Chart = ({ data, standards, title, xAxisLabel, yAxisLabel, darkMode = true
     standardLine: '#64748b',  // Более темный серый для линий стандартов
     achievementLine: '#f97316' // Оранжевый для линий достижений
   };
+
+  // Отображаем сообщение, если у пользователя нет данных
+  if (noUserData) {
+    return (
+      <div className={styles.chartContainer} style={{ backgroundColor: theme.backgroundColor }}>
+        <h3 style={{ color: theme.textColor }}>{title}</h3>
+        <div className={styles.noDataMessage} style={{ color: theme.textColor }}>
+          <div className={styles.messageIcon}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+          </div>
+          <p>{message || 'Необходимо загрузить данные о ваших тренировках для построения персонального прогноза.'}</p>
+          <div className={styles.actionHint}>
+            <p>Используйте форму "Добавить тренировку" слева для внесения ваших данных.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.chartContainer} style={{ backgroundColor: theme.backgroundColor }}>

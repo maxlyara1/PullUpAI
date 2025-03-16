@@ -29,6 +29,11 @@
   --button-text-color: #fff;    /* Белый текст */
   --button-hover-bg-color: #2d8651; /* Темно-зеленый при наведении */
   --button-disabled-bg-color: #cccccc; /* Серый для отключенных */
+  /* Цвета прогресса */
+  --fast-progress-color: #38a169;   /* Зеленый для быстрого прогресса */
+  --average-progress-color: #3182ce; /* Синий для среднего прогресса */
+  --slow-progress-color: #ed8936;   /* Оранжевый для медленного прогресса */
+  --very-slow-progress-color: #e53e3e; /* Красный для очень медленного прогресса */
 }
 
 /* Dark Theme */
@@ -49,6 +54,11 @@
   --button-text-color: #1a202c;    /* Темно-серый текст */
   --button-hover-bg-color: #38a169; /* Зеленый при наведении */
   --button-disabled-bg-color: #4a5568; /* Серый для отключенных */
+  /* Цвета прогресса для темной темы */
+  --fast-progress-color: #34d399;   /* Яркий зеленый для быстрого прогресса */
+  --average-progress-color: #60a5fa; /* Яркий синий для среднего прогресса */
+  --slow-progress-color: #f97316;   /* Яркий оранжевый для медленного прогресса */
+  --very-slow-progress-color: #f43f5e; /* Яркий красный для очень медленного прогресса */
 }
 
 /* Общие стили */
@@ -216,7 +226,7 @@ body {
 .table tr:hover td,
 .achievementsTable tr:hover td {
   background-color: var(--hover-color);
-  transform: translateX(4px);
+  transform: none; /* Убран эффект подпрыгивания */
 }
 
 .table tr:last-child td,
@@ -995,7 +1005,7 @@ input[type="date"]
 
 .achievementsTable tr:hover td {
   background-color: var(--hover-color);
-  transform: none; /* Отключаем сдвиг при наведении для этой таблицы */
+  transform: none; /* Уже убран эффект подпрыгивания */
 }
 
 .achievementsTable tr {
@@ -1033,4 +1043,78 @@ input[type="date"]
 .achievementsTable th:nth-child(4),
 .achievementsTable td:nth-child(4) {
   width: auto;
+}
+
+/* Стили для модального окна */
+.modal {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s;
+}
+
+/* Стили для отображения информации о прогрессе */
+.progressInfo {
+  margin-top: 20px;
+  padding: 16px;
+  border-radius: var(--border-radius);
+  background-color: var(--secondary-color);
+  border-left: 4px solid var(--primary-color);
+}
+
+.progressDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.progressDetails strong {
+  margin-right: 6px;
+}
+
+/* Стили для разных типов прогресса */
+.fastProgress {
+  color: var(--fast-progress-color);
+  font-weight: var(--font-weight-semibold);
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: rgba(56, 161, 105, 0.1);
+  margin-left: 4px;
+}
+
+.averageProgress {
+  color: var(--average-progress-color);
+  font-weight: var(--font-weight-semibold);
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: rgba(49, 130, 206, 0.1);
+  margin-left: 4px;
+}
+
+.slowProgress {
+  color: var(--slow-progress-color);
+  font-weight: var(--font-weight-semibold);
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: rgba(237, 137, 54, 0.1);
+  margin-left: 4px;
+}
+
+.verySlowProgress {
+  color: var(--very-slow-progress-color);
+  font-weight: var(--font-weight-semibold);
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: rgba(229, 62, 62, 0.1);
+  margin-left: 4px;
 }
