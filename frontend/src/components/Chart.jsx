@@ -140,7 +140,7 @@ const Chart = ({ data, standards, title, xAxisLabel, yAxisLabel, darkMode = true
             strokeWidth={2}
             dot={false}
             name="Прогноз (среднее)"
-            strokeDasharray="5 5"
+            connectNulls={true}
             animationDuration={1000}
             animationBegin={0}
           />
@@ -151,7 +151,7 @@ const Chart = ({ data, standards, title, xAxisLabel, yAxisLabel, darkMode = true
             strokeWidth={2}
             dot={false}
             name="Прогноз (максимум)"
-            strokeDasharray="5 5"
+            connectNulls={true}
             animationDuration={1000}
             animationBegin={200}
           />
@@ -162,7 +162,7 @@ const Chart = ({ data, standards, title, xAxisLabel, yAxisLabel, darkMode = true
             strokeWidth={2}
             dot={false}
             name="Прогноз (с весом)"
-            strokeDasharray="3 3"
+            connectNulls={true}
             animationDuration={1000}
             animationBegin={400}
           />
@@ -195,7 +195,7 @@ const Chart = ({ data, standards, title, xAxisLabel, yAxisLabel, darkMode = true
               y={standard.value}
               stroke={colors.standardLine}
               strokeDasharray="3 3"
-              strokeWidth={2}
+              strokeWidth={1}
               label={{
                 value: standard.rank,
                 position: 'right',
@@ -206,29 +206,6 @@ const Chart = ({ data, standards, title, xAxisLabel, yAxisLabel, darkMode = true
               }}
             />
           ))}
-
-          {/* Вертикальные линии достижений */}
-          {standards && standards.map((standard, index) => {
-            if (!standard.achievementDate) return null;
-            
-            return (
-              <ReferenceLine
-                key={`vline-${index}`}
-                x={standard.achievementDate}
-                stroke={colors.achievementLine}
-                strokeWidth={3}
-                label={{
-                  value: `${standard.rank} 🎯`,
-                  position: 'top',
-                  fill: colors.achievementLine,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  opacity: 1,
-                  padding: 5
-                }}
-              />
-            );
-          })}
         </LineChart>
       </ResponsiveContainer>
     </div>

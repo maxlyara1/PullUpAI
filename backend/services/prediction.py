@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import PolynomialFeatures
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_absolute_error, r2_score
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+from sklearn.linear_model import LinearRegression, Ridge
+from sklearn.pipeline import Pipeline
 from datetime import datetime, timedelta
 import json
 import logging
@@ -26,7 +26,29 @@ ch = logging.StreamHandler()
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
+# Константы
 FORECAST_INTERVAL = 4
+
+# Названия колонок
+COL_DATE = "date"
+COL_DAYS = "days"
+COL_AVG_PULLUPS = "avg_pullups"
+COL_LAG1 = "lag_avg_pullups_1"
+COL_LAG2 = "lag_avg_pullups_2"
+COL_LAG3 = "lag_avg_pullups_3"
+COL_GROWTH = "pullups_growth"
+
+# Список признаков для обучения и предсказания
+FEATURE_COLUMNS = [
+    COL_DAYS,
+    COL_LAG1,
+    COL_LAG2,
+    COL_LAG3,
+    COL_GROWTH,
+]
+
+# Список колонок для отображения в логах
+LOG_COLUMNS = [COL_DATE, COL_DAYS, COL_AVG_PULLUPS] + FEATURE_COLUMNS
 
 # Кэш для моделей регрессии
 MODEL_CACHE = {}
@@ -40,10 +62,44 @@ except FileNotFoundError:
     print("Модель k1_poly не найдена. Будет использовано базовое значение K1.")
 
 
+def prepare_features(df: pd.DataFrame, sort_by_column: str = COL_DATE) -> pd.DataFrame:
+    """
+    Создает признаки для модели: лаги и метрики роста.
+    
+    Args:
+        df: DataFrame с данными
+        sort_by_column: колонка для сортировки данных
+        
+    Returns:
+        DataFrame с добавленными признаками
+    """
+    if df.empty:
+        return df
+    
+    # Сортируем данные
+    df = df.sort_values(by=sort_by_column)
+    
+    # Создаем лаги значений подтягиваний
+    df[COL_LAG1] = df[COL_AVG_PULLUPS].shift(1)
+    df[COL_LAG2] = df[COL_AVG_PULLUPS].shift(2)
+    df[COL_LAG3] = df[COL_AVG_PULLUPS].shift(3)
+    
+    # Заполняем пропуски в лагах: сначала последними доступными значениями (ffill),
+    # потом, если остались пропуски в начале, заполняем следующими (bfill)
+    df[COL_LAG1] = df[COL_LAG1].fillna(method='ffill').fillna(method='bfill')
+    df[COL_LAG2] = df[COL_LAG2].fillna(method='ffill').fillna(method='bfill')
+    df[COL_LAG3] = df[COL_LAG3].fillna(method='ffill').fillna(method='bfill')
+    
+    # Абсолютное изменение: текущее значение - предыдущее
+    df[COL_GROWTH] = df[COL_AVG_PULLUPS].diff().fillna(0)
+    
+    return df
+
+
 @lru_cache(maxsize=32)
-def _get_cached_model_key(df_initial_json: str, degree: int) -> str:
+def _get_cached_model_key(df_initial_json: str) -> str:
     """Получить ключ для кэша модели."""
-    return f"{df_initial_json}_{degree}"
+    return f"{df_initial_json}"
 
 
 def calculate_k1(max_pullups: int) -> float:
@@ -157,46 +213,33 @@ def _prepare_data_for_regression(
     df_initial: pd.DataFrame, df_2025_real: pd.DataFrame
 ) -> tuple:
     """Подготовить данные для регрессии."""
-    if not df_2025_real.empty:
-        df_2025_real["date"] = pd.to_datetime(df_2025_real["date"], format="%d.%m.%Y")
-        start_date_2025 = df_2025_real["date"].iloc[0]
-        predict_year = start_date_2025.year
-        df_2025_real["days"] = process_dates(df_2025_real["date"], start_date_2025)
-    else:
-        start_date_2025 = datetime(datetime.now().year + 1, 1, 14)
-        predict_year = start_date_2025.year
-        df_2025_real["days"] = []
+    # Подготовка данных 2025
+    df_2025_real[COL_DATE] = pd.to_datetime(df_2025_real[COL_DATE], format="%d.%m.%Y")
+    start_date_2025 = df_2025_real[COL_DATE].iloc[0] if len(df_2025_real) > 0 else datetime(datetime.now().year + 1, 1, 14)
+    predict_year = start_date_2025.year
+    df_2025_real[COL_DAYS] = process_dates(df_2025_real[COL_DATE], start_date_2025)
 
-    if not df_initial.empty:
-        df_initial["date"] = pd.to_datetime(df_initial["date"], format="%d.%m.%Y")
-        start_date_initial = df_initial["date"].iloc[0]
-        df_initial["days"] = process_dates(df_initial["date"], start_date_initial)
-
-        df_initial = df_initial.sort_values(by="date")
-        df_initial["lag_avg_pullups_1"] = df_initial["avg_pullups"].shift(1)
-        df_initial["lag_avg_pullups_2"] = df_initial["avg_pullups"].shift(2)
-        df_initial["lag_avg_pullups_3"] = df_initial["avg_pullups"].shift(3)
-        df_initial["pullups_growth"] = df_initial["avg_pullups"].diff()
-        df_initial = df_initial.fillna(0)
-
-    else:
-        start_date_initial = datetime(2021, 7, 12)
-        df_initial["days"] = []
-        df_initial["lag_avg_pullups_1"] = 0
-        df_initial["lag_avg_pullups_2"] = 0
-        df_initial["lag_avg_pullups_3"] = 0
-        df_initial["pullups_growth"] = 0
-
+    # Подготовка обучающих данных
+    df_initial[COL_DATE] = pd.to_datetime(df_initial[COL_DATE], format="%d.%m.%Y")
+    start_date_initial = df_initial[COL_DATE].iloc[0] if len(df_initial) > 0 else datetime(2021, 7, 12)
+    df_initial[COL_DAYS] = process_dates(df_initial[COL_DATE], start_date_initial)
     initial_year = start_date_initial.year
+
+    # Создаем признаки с помощью универсальной функции
+    df_initial = prepare_features(df_initial)
+
+    # Выводим обучающий датафрейм для проверки
+    logger.info("\nTraining DataFrame:")
+    logger.info(f"\n{df_initial.to_string()}")
 
     return df_initial, start_date_2025, initial_year, predict_year
 
 
-def _build_regression_model(initial_data_processed: pd.DataFrame, degree: int) -> tuple:
+def _build_regression_model(initial_data_processed: pd.DataFrame) -> tuple:
     """Построить модель регрессии."""
     # Создаем ключ для кэша на основе данных и степени полинома
     df_json = initial_data_processed.to_json()
-    cache_key = _get_cached_model_key(df_json, degree)
+    cache_key = _get_cached_model_key(df_json)
 
     # Проверяем, есть ли модель в кэше
     if cache_key in MODEL_CACHE:
@@ -204,131 +247,162 @@ def _build_regression_model(initial_data_processed: pd.DataFrame, degree: int) -
         return MODEL_CACHE[cache_key]
 
     logger.info("Building new regression model")
-    X_initial = initial_data_processed[
-        [
-            "days",  # Используем дни
-            "lag_avg_pullups_1",
-            "lag_avg_pullups_2",
-            "lag_avg_pullups_3",
-            "pullups_growth",
-        ]
-    ].to_numpy()
-    y_initial = initial_data_processed["avg_pullups"].to_numpy()
-    poly = PolynomialFeatures(degree=degree)
-    X_poly_initial = poly.fit_transform(X_initial)
-    model = LinearRegression()
-    model.fit(X_poly_initial, y_initial)
+    
+    # Выводим данные для обучения
+    logger.info("\nTraining Data:")
+    logger.info(f"\n{initial_data_processed[FEATURE_COLUMNS + [COL_AVG_PULLUPS]].to_string()}")
+    
+    X_initial = initial_data_processed[FEATURE_COLUMNS].to_numpy()
+    y_initial = initial_data_processed[COL_AVG_PULLUPS].to_numpy()
+    
+    # Создаем пайплайн с предобработкой и моделью
+    model = Pipeline([
+        ('scaler', StandardScaler()),  # Стандартизация признаков
+        ('ridge', Ridge(alpha=0.1, solver='auto'))  # Регрессия Ridge с регуляризацией
+    ])
+    
+    # Обучаем модель
+    model.fit(X_initial, y_initial)
 
     # Сохраняем модель в кэш
-    MODEL_CACHE[cache_key] = (model, poly, X_poly_initial)
-    return model, poly, X_poly_initial
+    MODEL_CACHE[cache_key] = model
+    return model
 
 
-def _generate_forecast(
-    model: LinearRegression,
-    poly: PolynomialFeatures,
+def _generate_prediction_days(forecast_days: int) -> np.ndarray:
+    """Генерирует массив дней для прогноза."""
+    return np.arange(0, forecast_days, FORECAST_INTERVAL)
+
+
+def _get_historical_data(df_2025_real: pd.DataFrame, df_initial: pd.DataFrame) -> pd.DataFrame:
+    """Получает исторические данные для прогноза."""
+    historical_data = pd.DataFrame()
+    
+    if not df_2025_real.empty:
+        # Используем реальные данные 2025 года
+        historical_data = df_2025_real.copy()
+    elif not df_initial.empty:
+        # Используем исторические данные из прошлых лет
+        historical_data = df_initial.copy()
+        
+    # Сортируем данные по дням
+    if not historical_data.empty:
+        historical_data = historical_data.sort_values(by="days")
+        
+    return historical_data
+
+
+def _prepare_initial_features(prepared_data: pd.DataFrame) -> tuple:
+    """Подготавливает начальные значения признаков для прогноза."""
+    # Получаем последние значения для начала прогноза
+    last_values = prepared_data.iloc[-1] if not prepared_data.empty else pd.Series({
+        COL_AVG_PULLUPS: 0,
+        COL_LAG1: 0,
+        COL_LAG2: 0,
+        COL_LAG3: 0,
+        COL_GROWTH: 0,
+    })
+    
+    current_avg = last_values[COL_AVG_PULLUPS]
+    last_pullups = [
+        last_values[COL_LAG3], 
+        last_values[COL_LAG2], 
+        last_values[COL_LAG1]
+    ]
+    last_growth = last_values[COL_GROWTH]
+    
+    return current_avg, last_pullups, last_growth
+
+
+def _predict_next_value(
+    model: Pipeline,
+    day: int,
+    last_pullups: list,
+    last_growth: float,
+) -> tuple:
+    """Предсказывает следующее значение и обновляет признаки."""
+    # Создаем признаки в том же порядке, что и в FEATURE_COLUMNS
+    features = [
+        day,                # COL_DAYS
+        last_pullups[-1],   # COL_LAG1
+        last_pullups[-2],   # COL_LAG2
+        last_pullups[-3],   # COL_LAG3
+        last_growth,        # COL_GROWTH
+    ]
+    
+    input_features = np.array([features])
+    
+    # Предсказание через пайплайн (включает масштабирование)
+    predicted_avg = model.predict(input_features)[0]
+    
+    # Ограничиваем минимальное значение прогноза
+    predicted_avg = max(predicted_avg, 1.0)
+    
+    # Обновляем значения для следующего шага
+    new_last_pullups = last_pullups[1:] + [predicted_avg]
+    new_growth = predicted_avg - last_pullups[-1]
+    
+    return predicted_avg, features, new_last_pullups, new_growth
+
+
+def _make_predictions(
+    model: Pipeline,
+    predict_days: np.ndarray,
+    historical_data: pd.DataFrame
+) -> tuple:
+    """Выполняет прогнозирование."""
+    # Создаем признаки на основе исторических данных
+    prepared_data = prepare_features(historical_data)
+    
+    # Выводим данные для инференса
+    logger.info("\nInference Data (Initial):")
+    logger.info(f"\n{prepared_data.to_string()}")
+    
+    # Получаем начальные значения признаков
+    current_avg, last_pullups, last_growth = _prepare_initial_features(prepared_data)
+    
+    # Выполняем прогноз
+    predicted_pullups = []
+    inference_features = []
+    
+    for day in predict_days:
+        predicted_avg, features, last_pullups, last_growth = _predict_next_value(
+            model,
+            day,
+            last_pullups,
+            last_growth,
+        )
+        predicted_pullups.append(predicted_avg)
+        inference_features.append(features)
+    
+    # Выводим все входные признаки, использованные при инференсе
+    logger.info("\nInference Features Used:")
+    inference_df = pd.DataFrame(
+        inference_features,
+        columns=FEATURE_COLUMNS
+    )
+    inference_df["prediction"] = predicted_pullups
+    logger.info(f"\n{inference_df.to_string()}")
+    
+    return np.array(predicted_pullups)
+
+
+def _forecast(
+    model: Pipeline,
     df_2025_real: pd.DataFrame,
     df_initial: pd.DataFrame,
-    start_date_2025: datetime,
     forecast_days: int,
 ) -> tuple:
-    """Сгенерировать прогноз."""
-    if not df_2025_real.empty:
-        # Находим последнюю дату с фактическими данными
-        last_real_day = df_2025_real["days"].max()
-        # Генерируем дни для прогноза, начиная с последней фактической даты
-        predict_days = np.arange(
-            last_real_day, last_real_day + forecast_days, FORECAST_INTERVAL
-        )
-    else:
-        predict_days = np.arange(0, forecast_days, FORECAST_INTERVAL)
-
-    historical_data_for_forecast = pd.DataFrame()
-
-    if not df_2025_real.empty:
-        historical_data_for_forecast = df_2025_real.copy()
-    elif not df_initial.empty:
-        historical_data_for_forecast = df_initial.copy()
-    else:
-        historical_data_for_forecast["avg_pullups"] = [0] * 3
-        historical_data_for_forecast["days"] = [-3, -2, -1]
-
-    # Add lag features to historical_data_for_forecast for inference
-    historical_data_for_forecast = historical_data_for_forecast.sort_values(by="days")
-
-    # Создаем скользящее окно для более плавных лагов
-    window_size = 3
-    pullups_series = historical_data_for_forecast["avg_pullups"]
-
-    # Используем скользящее среднее для сглаживания
-    smoothed_pullups = pullups_series.rolling(
-        window=window_size, min_periods=1, center=True
-    ).mean()
-
-    # Заполняем лаги с использованием сглаженных данных
-    historical_data_for_forecast["lag_avg_pullups_1"] = smoothed_pullups.shift(1)
-    historical_data_for_forecast["lag_avg_pullups_2"] = smoothed_pullups.shift(2)
-    historical_data_for_forecast["lag_avg_pullups_3"] = smoothed_pullups.shift(3)
-
-    # Рассчитываем рост как разницу между сглаженными значениями
-    historical_data_for_forecast["pullups_growth"] = smoothed_pullups.diff()
-
-    # Заполняем пропущенные значения последним известным значением
-    last_known_value = smoothed_pullups.iloc[-1]
-    historical_data_for_forecast = historical_data_for_forecast.fillna(
-        method="ffill"
-    ).fillna(last_known_value)
-
-    predicted_pullups = []
-    last_pullups = smoothed_pullups.tolist()[-3:]
-    last_lags = historical_data_for_forecast[
-        ["lag_avg_pullups_1", "lag_avg_pullups_2", "lag_avg_pullups_3"]
-    ].values.tolist()[-3:]
-    last_growth = historical_data_for_forecast["pullups_growth"].tolist()[-1]
-
-    # Используем скользящее окно для прогноза
-    window_predictions = []
-    for day in predict_days:
-        input_features = np.array(
-            [
-                [
-                    day,
-                    last_lags[-1][0] if last_lags else last_known_value,
-                    last_lags[-1][1] if len(last_lags) > 1 else last_known_value,
-                    last_lags[-1][2] if len(last_lags) > 2 else last_known_value,
-                    last_growth,
-                ]
-            ]
-        )
-
-        input_features_poly = poly.transform(input_features)
-        predicted_avg = model.predict(input_features_poly)[0]
-
-        # Добавляем предсказание в окно
-        window_predictions.append(predicted_avg)
-        if len(window_predictions) > window_size:
-            window_predictions.pop(0)
-
-        # Используем среднее по окну для более плавного прогноза
-        smoothed_prediction = np.mean(window_predictions)
-        predicted_pullups.append(smoothed_prediction)
-
-        # Обновляем значения для следующего прогноза
-        last_pullups = last_pullups[1:] + [smoothed_prediction]
-        last_lags = last_lags[1:] + [
-            [last_pullups[-1], last_pullups[-2], last_pullups[-3]]
-        ]
-        last_growth = (
-            smoothed_prediction - last_pullups[-2] if len(last_pullups) > 1 else 0
-        )
-
-    # Если есть фактические данные, добавляем их в начало прогноза
-    if not df_2025_real.empty:
-        predict_days = np.concatenate([df_2025_real["days"].values, predict_days])
-        predicted_pullups = np.concatenate(
-            [df_2025_real["avg_pullups"].values, predicted_pullups]
-        )
-
+    """Выполняет полный процесс прогнозирования."""
+    # Генерируем дни для прогноза
+    predict_days = _generate_prediction_days(forecast_days)
+    
+    # Получаем исторические данные
+    historical_data = _get_historical_data(df_2025_real, df_initial)
+    
+    # Выполняем прогнозирование
+    predicted_pullups = _make_predictions(model, predict_days, historical_data)
+    
     return predict_days, predicted_pullups
 
 
@@ -341,81 +415,55 @@ def _calculate_achievement_dates(
 ) -> dict:
     """Рассчитать даты достижения стандартов."""
     achievement_dates = {}
+    
+    # Вычисляем k2 один раз
     k2 = calculate_k2(weight_category)
-    max_pullups_no_weight_predicted = [
-        max_from_avg(avg) for avg in predicted_avg_pullups
-    ]
-    max_pullups_with_weight_predicted = [
-        round(max_p / k2) for max_p in max_pullups_no_weight_predicted
-    ]
-
+    
+    # Предварительно вычисляем все максимальные значения
+    max_pullups_no_weight_predicted = np.array([max_from_avg(avg) for avg in predicted_avg_pullups])
+    max_pullups_with_weight_predicted = np.round(max_pullups_no_weight_predicted / k2).astype(int)
+    
     # Проверяем фактические достижения
     actual_max_achieved = 0
     if actual_data is not None and not actual_data.empty:
-        actual_max_achieved = max(
-            round(max_from_avg(avg) / k2) for avg in actual_data["avg_pullups"]
-        )
-
+        # Вычисляем максимальное значение один раз
+        actual_max_values = np.array([max_from_avg(avg) for avg in actual_data[COL_AVG_PULLUPS]])
+        actual_max_with_weight = np.round(actual_max_values / k2).astype(int)
+        actual_max_achieved = np.max(actual_max_with_weight) if len(actual_max_with_weight) > 0 else 0
+    
+    # Предварительно вычисляем параметры для экстраполяции
+    if len(max_pullups_with_weight_predicted) > 1:
+        last_value = max_pullups_with_weight_predicted[-1]
+        first_value = max_pullups_with_weight_predicted[0]
+        days_total = predict_days[-1] - predict_days[0]
+        progress_per_day = (last_value - first_value) / days_total if days_total > 0 else 0
+    else:
+        progress_per_day = 0
+    
+    # Обрабатываем каждый разряд
     for rank, max_pullups_with_weight_standard in pullup_standards.items():
         # Если разряд уже достигнут по фактическим данным
         if actual_max_achieved >= max_pullups_with_weight_standard:
             achievement_dates[rank] = 0  # 0 означает "уже достигнуто"
             continue
-
-        try:
-            day_achieved = next(
-                day
-                for day, predicted_max_with_weight in zip(
-                    predict_days, max_pullups_with_weight_predicted
-                )
-                if predicted_max_with_weight >= max_pullups_with_weight_standard
-            )
-            achievement_dates[rank] = int(day_achieved)
-        except StopIteration:
-            # Если не нашли точку пересечения, экстраполируем
-            if len(max_pullups_with_weight_predicted) > 1:
-                last_value = max_pullups_with_weight_predicted[-1]
-                first_value = max_pullups_with_weight_predicted[0]
-                days_total = predict_days[-1] - predict_days[0]
-                progress_per_day = (last_value - first_value) / days_total
-                if progress_per_day > 0:
-                    days_to_target = (
-                        max_pullups_with_weight_standard - last_value
-                    ) / progress_per_day
-                    achievement_dates[rank] = int(predict_days[-1] + days_to_target)
-                else:
-                    achievement_dates[rank] = None
-            else:
-                achievement_dates[rank] = None
-
+        
+        # Ищем индекс первого дня, когда достигается стандарт
+        # Используем numpy для более эффективного поиска
+        indices = np.where(max_pullups_with_weight_predicted >= max_pullups_with_weight_standard)[0]
+        
+        if len(indices) > 0:
+            # Найден день достижения стандарта
+            first_index = indices[0]
+            achievement_dates[rank] = int(predict_days[first_index])
+        elif progress_per_day > 0:
+            # Экстраполируем, если есть положительный прогресс
+            days_to_target = (max_pullups_with_weight_standard - last_value) / progress_per_day
+            achievement_dates[rank] = int(predict_days[-1] + days_to_target)
+        else:
+            # Стандарт не будет достигнут в прогнозируемом периоде
+            achievement_dates[rank] = None
+    
     return achievement_dates
-
-
-def _create_chart1_data(
-    initial_data_processed: pd.DataFrame,
-    model: LinearRegression,
-    X_poly_initial: np.ndarray,
-    initial_year: int,
-) -> dict:
-    """Создать данные для первого графика."""
-    regression_line = model.predict(X_poly_initial).tolist()
-
-    chart_data = []
-    for i, day in enumerate(initial_data_processed["days"].tolist()):
-        chart_data.append(
-            {
-                "day": day,
-                "actual": initial_data_processed["avg_pullups"].tolist()[i],
-                "regression": regression_line[i],
-            }
-        )
-
-    return {
-        "data": chart_data,
-        "title": f"Динамика подтягиваний в {initial_year} году",
-        "xAxisLabel": "Дни с начала наблюдений",
-        "yAxisLabel": "Среднее количество подтягиваний",
-    }
 
 
 def _create_chart2_data(
@@ -442,34 +490,40 @@ def _create_chart2_data(
 
     # Создаем основные данные графика
     chart_data = []
+    
+    # Сначала добавляем фактические данные
+    if not df_2025_real.empty:
+        for i, row in df_2025_real.iterrows():
+            date = row[COL_DATE].strftime("%Y-%m-%d")
+            chart_data.append({
+                "date": date,
+                "day": row[COL_DAYS],
+                "actual": row[COL_AVG_PULLUPS],
+                "average": None,
+                "maximum": None,
+                "withWeight": None
+            })
+            
+    # Добавляем прогнозные данные
     for i, day in enumerate(predict_days.tolist()):
         date = (start_date_2025 + timedelta(days=int(day))).strftime("%Y-%m-%d")
-        point = {
-            "date": date,
-            "day": day,
-            "average": round(predicted_avg_pullups[i], 1),
-            "maximum": max_pullups_no_weight_predicted[i],
-            "withWeight": max_pullups_with_weight_predicted[i],
-        }
-        chart_data.append(point)
-
-    # Добавляем фактические данные, если есть
-    if not df_2025_real.empty:
-        for i, day in enumerate(df_2025_real["days"].tolist()):
-            date = (start_date_2025 + timedelta(days=int(day))).strftime("%Y-%m-%d")
-            existing_point = next(
-                (point for point in chart_data if point["day"] == day), None
-            )
-            if existing_point:
-                existing_point["actual"] = df_2025_real["avg_pullups"].tolist()[i]
-            else:
-                chart_data.append(
-                    {
-                        "date": date,
-                        "day": day,
-                        "actual": df_2025_real["avg_pullups"].tolist()[i],
-                    }
-                )
+        # Проверяем, нет ли уже точки с такой датой
+        existing_point = next((point for point in chart_data if point["date"] == date), None)
+        if existing_point:
+            # Если точка существует, добавляем к ней прогнозные значения
+            existing_point["average"] = round(predicted_avg_pullups[i], 1)
+            existing_point["maximum"] = max_pullups_no_weight_predicted[i]
+            existing_point["withWeight"] = max_pullups_with_weight_predicted[i]
+        else:
+            # Если точки нет, создаем новую
+            chart_data.append({
+                "date": date,
+                "day": day,
+                "actual": None,
+                "average": round(predicted_avg_pullups[i], 1),
+                "maximum": max_pullups_no_weight_predicted[i],
+                "withWeight": max_pullups_with_weight_predicted[i]
+            })
 
     # Сортируем данные по дням
     chart_data.sort(key=lambda x: x["day"])
@@ -514,99 +568,11 @@ def _create_chart2_data(
     }
 
 
-def _calculate_metrics(
-    initial_data_processed: pd.DataFrame,
-    model: LinearRegression,
-    poly: PolynomialFeatures,
-    df_2025_real: pd.DataFrame,
-    df_initial: pd.DataFrame,
-    predict_year: int,
-    initial_year: int,
-) -> tuple:
-    """Рассчитать метрики модели."""
-    X_initial_pred = initial_data_processed[
-        [
-            "days",  # Используем дни
-            "lag_avg_pullups_1",
-            "lag_avg_pullups_2",
-            "lag_avg_pullups_3",
-            "pullups_growth",
-        ]
-    ].to_numpy()
-    X_initial_pred_poly = poly.transform(X_initial_pred)
-    predicted_initial = model.predict(X_initial_pred_poly)
-    mae_initial = mean_absolute_error(
-        initial_data_processed["avg_pullups"], predicted_initial
-    )
-    r2_initial = r2_score(initial_data_processed["avg_pullups"], predicted_initial)
-
-    if not df_2025_real.empty and len(df_2025_real["date"]) > 1:
-        df_2025_real_processed = df_2025_real.copy()
-        if not df_2025_real_processed.empty:
-            df_2025_real_processed = df_2025_real_processed.sort_values(by="date")
-            df_2025_real_processed["lag_avg_pullups_1"] = df_2025_real_processed[
-                "avg_pullups"
-            ].shift(1)
-            df_2025_real_processed["lag_avg_pullups_2"] = df_2025_real_processed[
-                "avg_pullups"
-            ].shift(2)
-            df_2025_real_processed["lag_avg_pullups_3"] = df_2025_real_processed[
-                "avg_pullups"
-            ].shift(3)
-            df_2025_real_processed["pullups_growth"] = df_2025_real_processed[
-                "avg_pullups"
-            ].diff()
-            df_2025_real_processed = df_2025_real_processed.fillna(0)
-        else:
-            df_2025_real_processed["lag_avg_pullups_1"] = 0
-            df_2025_real_processed["lag_avg_pullups_2"] = 0
-            df_2025_real_processed["lag_avg_pullups_3"] = 0
-            df_2025_real_processed["pullups_growth"] = 0
-
-        real_days_2025 = df_2025_real_processed[
-            [
-                "days",  # Используем дни
-                "lag_avg_pullups_1",
-                "lag_avg_pullups_2",
-                "lag_avg_pullups_3",
-                "pullups_growth",
-            ]
-        ].to_numpy()
-        real_days_2025_poly = poly.transform(real_days_2025)
-        predicted_for_real_days = model.predict(real_days_2025_poly)
-        real_values_2025 = df_2025_real["avg_pullups"].to_numpy()
-        mae_2025 = mean_absolute_error(real_values_2025, predicted_for_real_days)
-        r2_2025 = r2_score(real_values_2025, predicted_for_real_days)
-    else:
-        mae_2025 = None
-        r2_2025 = None
-
-    try:
-        predict_days, predicted_pullups = _generate_forecast(
-            model,
-            poly,
-            df_2025_real,
-            df_initial,
-            datetime(predict_year, 1, 14),
-            90,
-        )
-        forecast_improvement = (
-            predicted_pullups[-1] - predicted_pullups[0]
-            if len(predicted_pullups) > 1
-            else None
-        )
-    except UnboundLocalError:
-        forecast_improvement = None
-
-    return mae_initial, r2_initial, mae_2025, r2_2025, forecast_improvement
-
-
 async def get_prediction_data(
     weight_category: str = "до 75", forecast_days: int = 90
 ) -> dict:
     """Получить данные для прогноза."""
     try:
-        degree = 1  # Фиксируем линейную регрессию
         (
             df_2025_real,
             df_initial,
@@ -618,9 +584,9 @@ async def get_prediction_data(
             initial_year,
             predict_year,
         ) = _prepare_data_for_regression(df_initial, df_2025_real)
-        model, poly, X_poly_initial = _build_regression_model(df_initial, degree)
-        predict_days, predicted_avg_pullups = _generate_forecast(
-            model, poly, df_2025_real, df_initial, start_date_2025, forecast_days
+        model = _build_regression_model(df_initial)
+        predict_days, predicted_avg_pullups = _forecast(
+            model, df_2025_real, df_initial, forecast_days
         )
         achievement_dates = _calculate_achievement_dates(
             predict_days,
@@ -628,12 +594,6 @@ async def get_prediction_data(
             pullup_standards,
             weight_category,
             df_2025_real,  # Передаем фактические данные
-        )
-        chart1_data = _create_chart1_data(
-            df_initial,
-            model,
-            X_poly_initial,
-            initial_year,
         )
         chart2_data = _create_chart2_data(
             predict_days,
@@ -646,41 +606,19 @@ async def get_prediction_data(
             forecast_days,
             weight_category,
         )
-        (
-            mae_initial,
-            r2_initial,
-            mae_2025,
-            r2_2025,
-            forecast_improvement,
-        ) = _calculate_metrics(
-            df_initial,
-            model,
-            poly,
-            df_2025_real,
-            df_initial,
-            predict_year,
-            initial_year,
-        )
 
         data_2025_prepared = []
         for i in range(len(df_2025_real)):
             data_2025_prepared.append(
                 TrainingData(
-                    date=df_2025_real["date"].iloc[i].strftime("%Y-%m-%d"),
-                    avg_pullups=df_2025_real["avg_pullups"].iloc[i],
+                    date=df_2025_real[COL_DATE].iloc[i].strftime("%Y-%m-%d"),
+                    avg_pullups=df_2025_real[COL_AVG_PULLUPS].iloc[i],
                 )
             )
 
         return {
             "data_2025": data_2025_prepared,
-            "chart1": json.dumps(convert_to_json_serializable(chart1_data)),
             "chart2": json.dumps(convert_to_json_serializable(chart2_data)),
-            "mae_2021": mae_initial,
-            "r2_2021": r2_initial,
-            "mae_2025": mae_2025,
-            "r2_2025": r2_2025,
-            "forecast_improvement": forecast_improvement,
-            "selected_degree": degree,
             "achievement_dates": achievement_dates,
             "pullup_standards": pullup_standards,
             "forecast_days": forecast_days,

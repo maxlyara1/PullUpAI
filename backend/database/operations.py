@@ -16,7 +16,7 @@ class DataFormatError(Exception):
 
 
 DATA_DIR = Path("data/processed")
-DATA_FILE = DATA_DIR / "training_data.csv"
+DATA_FILE = DATA_DIR / "data_2025.csv"
 INITIAL_DATA_FILE = DATA_DIR / "initial_data.csv"
 STANDARDS_FILE = DATA_DIR / "standards.csv"
 
