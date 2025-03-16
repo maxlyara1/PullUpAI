@@ -127,6 +127,7 @@ npm install
 
 5. **Запуск backend:**
 ```bash
+cd ..
 python run.py
 ```
 
