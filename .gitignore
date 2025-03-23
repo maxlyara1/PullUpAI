@@ -11,3 +11,4 @@ data_2025.csv
 /backend/services/__pycache__
 /frontend/node_modules
 /frontend/build
+.DS_Store

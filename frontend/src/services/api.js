@@ -3,6 +3,21 @@ import axios from 'axios';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
+// Глобальная настройка axios для предотвращения кэширования
+axios.defaults.headers.common['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+axios.defaults.headers.common['Pragma'] = 'no-cache';
+axios.defaults.headers.common['Expires'] = '0';
+
+// Добавляем перехватчик для всех запросов, чтобы добавлять timestamp
+axios.interceptors.request.use(request => {
+    // Для GET запросов добавляем timestamp параметр
+    if (request.method === 'get') {
+        request.params = request.params || {};
+        request.params.timestamp = new Date().getTime();
+    }
+    return request;
+});
+
 class ApiError extends Error {
     constructor(status, message) {
         super(message);
@@ -14,9 +29,29 @@ class ApiError extends Error {
 //  Функция для получения данных для прогноза
 export const getPredictionData = async (weightCategory, forecastDays) => {
     try {
+        // Генерируем уникальный идентификатор запроса для гарантированного предотвращения кэширования
+        const uniqueId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        const timestamp = new Date().getTime();
+        
+        console.log(`API Request: генерация уникального ID запроса: ${uniqueId}_${timestamp}`);
+        
         const response = await axios.get(`${API_BASE_URL}/prediction`, {
-            params: { weight_category: weightCategory, forecast_days: forecastDays },
+            params: { 
+                weight_category: weightCategory, 
+                forecast_days: forecastDays,
+                cache_breaker: `${uniqueId}_${timestamp}`,  // Добавляем случайное значение и timestamp
+                random: Math.random()  // Дополнительный параметр для предотвращения кэширования
+            },
+            headers: {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0',
+                'If-Modified-Since': new Date(0).toUTCString(), // Заставляет игнорировать кэширование на уровне браузера
+                'X-Requested-With': timestamp  // Добавляем timestamp в заголовки
+            }
         });
+        
+        console.log('API Response received:', response.status);
         return response.data;
     } catch (error) {
         if (error.response) {

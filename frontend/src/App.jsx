@@ -65,6 +65,8 @@ function App() {
     const handleSetForecastDays = (value) => {
         setForecastDays(value);
         localStorage.setItem('forecastDays', JSON.stringify(value));
+        // Также обновляем данные при изменении количества прогнозируемых дней
+        updateData();
     };
 
     const toggleDarkMode = () => {
@@ -101,22 +103,70 @@ function App() {
         setLoading(true);
         try {
             console.log(`Fetching data for: weight=${weightCategory}, days=${forecastDays}`);
-            const result = await api.getPredictionData(weightCategory, forecastDays);
-            setData(result.data_2025);
-            const chart2DataObj = JSON.parse(result.chart2);
-            // Добавляем только информацию о типе прогресса
-            chart2DataObj.progress_type = result.progress_type;
-            // Удаляем: growth_per_day и regression_coeffs
-            // console.log('Growth per day:', result.growth_per_day);
-            console.log('Updated standards for weight category:', weightCategory);
-            setChart2Data(chart2DataObj);
-            setAchievementDates(result.achievement_dates);
-            setPullupStandards(result.pullup_standards);
-            setError('');
+            const timestamp = new Date().getTime();
+            console.log(`Добавлен timestamp для предотвращения кэширования: ${timestamp}`);
+            
+            // Сначала сбрасываем данные графика, чтобы гарантировать, что старые данные не будут использоваться
+            setChart2Data(null);
+            console.log('Состояние chart2Data сброшено перед запросом новых данных');
+            
+            // Принудительно вызываем сборку мусора, чтобы очистить все возможные кэшированные ссылки
+            // (это нестандартная практика, но может помочь в сложных случаях с кэшированием)
+            setTimeout(() => {
+                // Делаем запрос к API только после сброса предыдущего состояния
+                (async () => {
+                    try {
+                        const result = await api.getPredictionData(weightCategory, forecastDays);
+                        console.log('Получены новые данные от сервера:', result);
+                        
+                        // Устанавливаем данные таблицы
+                        setData(result.data_2025);
+                        console.log('Обновлены данные таблицы:', result.data_2025);
+                        
+                        // Обрабатываем данные графика
+                        const chart2DataObj = JSON.parse(result.chart2);
+                        chart2DataObj.progress_type = result.progress_type;
+                        // Добавляем информацию о источнике данных для модели
+                        chart2DataObj.model_source = result.model_source || "historical";
+                        console.log('Источник данных для модели:', chart2DataObj.model_source);
+                        
+                        // Проверка наличия данных для графика
+                        console.log('Новые данные для графика:', chart2DataObj);
+                        if (chart2DataObj.data && chart2DataObj.data.length > 0) {
+                            console.log(`Получено ${chart2DataObj.data.length} точек для графика`);
+                            console.log('Пример данных графика:', chart2DataObj.data[0]);
+                        } else {
+                            console.warn('Пустые данные для графика!');
+                        }
+                        
+                        // Обновляем состояние данных графика с уникальным идентификатором
+                        chart2DataObj._uniqueId = timestamp;
+                        setChart2Data(chart2DataObj);
+                        console.log(`Установлены новые данные графика с уникальным ID: ${timestamp}`);
+                        
+                        // Обновляем даты достижения разрядов
+                        console.log('Новые даты достижения разрядов:', result.achievement_dates);
+                        setAchievementDates(result.achievement_dates);
+                        
+                        // Обновляем стандарты подтягиваний
+                        setPullupStandards(result.pullup_standards);
+                        
+                        // Сохраняем метку времени в консоли
+                        console.log(`Данные успешно обновлены в ${new Date().toLocaleTimeString()}`);
+                        
+                        setError('');
+                    } catch (error) {
+                        console.error("Error fetching data:", error);
+                        setError(error.message || 'Произошла ошибка при загрузке данных.');
+                    } finally {
+                        setLoading(false);
+                        if (isInitialLoad) setIsInitialLoad(false);
+                    }
+                })();
+            }, 100); // Небольшая задержка для обработки React-обновлений состояния
         } catch (error) {
-            console.error("Error fetching data:", error);
-            setError(error.message || 'Произошла ошибка при загрузке данных.');
-        } finally {
+            console.error("Error in update flow:", error);
+            setError(error.message || 'Произошла ошибка при обновлении данных.');
             setLoading(false);
             if (isInitialLoad) setIsInitialLoad(false);
         }
@@ -143,8 +193,17 @@ function App() {
 
     const handleAddData = async (newData) => {
         try {
+            console.log('Добавление новых данных:', newData);
             await api.addData(newData);
-            await updateData();
+            console.log('Данные успешно добавлены на сервер');
+            
+            // Добавляем небольшую задержку перед обновлением данных
+            // чтобы убедиться, что сервер успел обработать запрос
+            console.log('Ожидание 500мс перед запросом обновленных данных...');
+            setTimeout(async () => {
+                console.log('Запрос обновленных данных после добавления...');
+                await updateData();
+            }, 500);
         } catch (error) {
             console.error("Error adding data:", error);
             setError(error.message || 'Произошла ошибка при добавлении данных.');
@@ -241,7 +300,10 @@ function App() {
                                 <h2 className={styles.subtitle}>
                                     Прогноз Достижения Разрядов
                                 </h2>
-                                <table className={styles.achievementsTable}>
+                                <table 
+                                    className={styles.achievementsTable}
+                                    key={`achievements-${new Date().getTime()}`}
+                                >
                                     <thead>
                                         <tr>
                                             <th>Разряд</th>
@@ -316,9 +378,17 @@ function App() {
                                     <div className={styles.chartWrapper}>
                                         <div className={styles.chartHeader}>
                                             <h3>Прогноз и фактические тренировки</h3>
+                                            {chart2Data && chart2Data.data && chart2Data.data.length > 0 && (
+                                                <div className={styles.modelSourceInfo}>
+                                                    <span className={styles.modelSourceHistorical}>
+                                                        ℹ️ Модель обучена на исторических данных 2021 года и применяется к вашим текущим результатам
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
                                         <ErrorBoundary>
                                             <Chart
+                                                key={`chart-${chart2Data?._uniqueId || new Date().getTime()}`}
                                                 data={chart2Data.data}
                                                 standards={chart2Data.standards}
                                                 xAxisLabel={chart2Data.xAxisLabel}
@@ -326,6 +396,7 @@ function App() {
                                                 darkMode={isDarkMode}
                                                 noUserData={chart2Data.noUserData || false}
                                                 message={chart2Data.message || ''}
+                                                timestamp={chart2Data?._uniqueId || new Date().getTime()}
                                             />
                                         </ErrorBoundary>
                                     </div>

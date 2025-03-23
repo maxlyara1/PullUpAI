@@ -55,7 +55,7 @@ const CustomTooltip = ({ active, payload, label, theme }) => {
   );
 };
 
-const Chart = ({ data, standards, title, xAxisLabel, yAxisLabel, darkMode = true, noUserData = false, message = '' }) => {
+const ChartComponent = ({ data, standards, title, xAxisLabel, yAxisLabel, darkMode = true, noUserData = false, message = '' }) => {
   const theme = {
     backgroundColor: darkMode ? '#1e293b' : '#ffffff',
     textColor: darkMode ? '#f8fafc' : '#1e293b',
@@ -233,5 +233,32 @@ const Chart = ({ data, standards, title, xAxisLabel, yAxisLabel, darkMode = true
     </div>
   );
 };
+
+// Функция сравнения для React.memo, предотвращающая кэширование компонента
+// Возвращает false, чтобы всегда перерисовывать компонент при обновлении данных
+function arePropsEqual(prevProps, nextProps) {
+  // Если есть данные для графика, всегда обновляем компонент
+  if (nextProps.data && nextProps.data.length > 0) {
+    console.log('Chart will re-render because data is present');
+    return false; // Возвращает false для перерисовки компонента
+  }
+  
+  // Для режима без данных пользователя, используем стандартное сравнение
+  if (nextProps.noUserData) {
+    const equalProps = (
+      prevProps.noUserData === nextProps.noUserData &&
+      prevProps.message === nextProps.message &&
+      prevProps.darkMode === nextProps.darkMode
+    );
+    console.log('Chart in noUserData mode, will re-render:', !equalProps);
+    return equalProps;
+  }
+  
+  // В других случаях всегда обновляем
+  return false;
+}
+
+// Оборачиваем компонент в React.memo с нашей функцией сравнения
+const Chart = React.memo(ChartComponent, arePropsEqual);
 
 export default Chart;

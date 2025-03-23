@@ -1,3 +1,9 @@
+"""
+Модуль для прогнозирования результатов подтягиваний на основе исторических данных.
+
+Включает функции для подготовки данных, обучения моделей и создания прогнозов 
+с использованием методов машинного обучения.
+"""
 from typing import Optional
 import numpy as np
 import pandas as pd
@@ -17,6 +23,7 @@ from backend.database.operations import (
 from backend.models.training import TrainingData
 from functools import lru_cache
 
+# Настройка логирования
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
@@ -24,13 +31,13 @@ ch = logging.StreamHandler()
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
-# Константы
+# Константы для настройки модели
 FORECAST_INTERVAL = 4
 MIN_PULLUPS = 0
 MAX_PULLUPS = 100
 MAX_CACHE_SIZE = 50
 
-# Названия колонок
+# Названия колонок в данных
 COL_DATE = "date"
 COL_DAYS = "days"
 COL_AVG_PULLUPS = "avg_pullups"
@@ -38,7 +45,6 @@ COL_LAG1 = "lag_avg_pullups_1"
 COL_LAG2 = "lag_avg_pullups_2"
 COL_GROWTH = "pullups_growth"
 
-# Список признаков для обучения и предсказания
 FEATURE_COLUMNS = [
     COL_DAYS,
     COL_LAG1,
@@ -46,53 +52,103 @@ FEATURE_COLUMNS = [
     COL_GROWTH,
 ]
 
-# Список колонок для отображения в логах
 LOG_COLUMNS = [COL_DATE, COL_DAYS, COL_AVG_PULLUPS] + FEATURE_COLUMNS
 
+IS_CACHE_ENABLED = False
 
-# Кэш для моделей регрессии
+
 class ModelCache:
+    """
+    Кэш для хранения обученных моделей.
+    
+    Предотвращает повторное обучение моделей для одинаковых входных данных.
+    Автоматически удаляет наименее используемые модели при превышении максимального размера.
+    """
     def __init__(self, max_size: int = MAX_CACHE_SIZE):
+        """
+        Инициализирует кэш моделей.
+        
+        Args:
+            max_size: Максимальное количество моделей в кэше
+        """
         self.cache = {}
         self.max_size = max_size
         self.access_times = {}
 
     def get(self, key: str) -> Optional[Pipeline]:
+        """
+        Получить модель из кэша по ключу.
+        
+        Args:
+            key: Ключ для поиска модели
+            
+        Returns:
+            Найденная модель или None, если модель не найдена
+        """
+        if not IS_CACHE_ENABLED:
+            return None
+            
         if key in self.cache:
             self._update_access_time(key)
             return self.cache[key]
         return None
 
     def set(self, key: str, model: Pipeline) -> None:
+        """
+        Добавить модель в кэш.
+        
+        Args:
+            key: Ключ для сохранения модели
+            model: Модель для сохранения
+        """
+        if not IS_CACHE_ENABLED:
+            return
+            
         if len(self.cache) >= self.max_size:
             self._remove_least_used()
         self.cache[key] = model
         self._update_access_time(key)
 
     def _update_access_time(self, key: str) -> None:
+        """Обновить время последнего доступа к модели."""
         self.access_times[key] = datetime.now()
 
     def _remove_least_used(self) -> None:
+        """Удалить наименее используемую модель из кэша."""
         if not self.cache:
             return
         oldest_key = min(self.access_times.items(), key=lambda x: x[1])[0]
         del self.cache[oldest_key]
         del self.access_times[oldest_key]
+        
+    def clear(self) -> None:
+        """Очистить кэш моделей."""
+        self.cache.clear()
+        self.access_times.clear()
 
 
 MODEL_CACHE = ModelCache()
 
+# Загрузка предобученных моделей
 try:
     k1_model = joblib.load("backend/k1_poly_model.pkl")
     poly = joblib.load("backend/k1_poly_features.pkl")
 except FileNotFoundError:
     k1_model = None
     poly = None
-    print("Модель k1_poly не найдена. Будет использовано базовое значение K1.")
+    logger.warning("Модель k1_poly не найдена. Будет использовано базовое значение K1.")
 
 
 def validate_training_data(df: pd.DataFrame) -> None:
-    """Валидация данных тренировок."""
+    """
+    Проверить корректность данных о тренировках.
+    
+    Args:
+        df: DataFrame с данными о тренировках
+        
+    Raises:
+        ValueError: В случае некорректных данных
+    """
     if df[COL_AVG_PULLUPS].min() < MIN_PULLUPS:
         raise ValueError(f"Количество подтягиваний не может быть меньше {MIN_PULLUPS}")
     if df[COL_AVG_PULLUPS].max() > MAX_PULLUPS:
@@ -105,58 +161,34 @@ def validate_training_data(df: pd.DataFrame) -> None:
 
 
 def prepare_features(df: pd.DataFrame, sort_by_column: str = COL_DATE) -> pd.DataFrame:
-    """
-    Создает признаки для модели: лаги и метрики роста.
-
-    Args:
-        df: DataFrame с данными
-        sort_by_column: колонка для сортировки данных
-
-    Returns:
-        DataFrame с добавленными признаками
-    """
     if df.empty:
         return df
 
     validate_training_data(df)
 
-    # Сортируем данные
     df = df.sort_values(by=sort_by_column)
 
-    # Создаем лаги значений подтягиваний
     df[COL_LAG1] = df[COL_AVG_PULLUPS].shift(1)
     df[COL_LAG2] = df[COL_AVG_PULLUPS].shift(2)
 
-    # Добавляем новые признаки
-    # Скользящее среднее за 3 тренировки
     df["rolling_mean_3"] = df[COL_AVG_PULLUPS].rolling(window=3, min_periods=1).mean()
 
-    # Темп роста
     df["growth_rate"] = df[COL_AVG_PULLUPS].pct_change()
 
-    # Взаимодействие признаков
     df["lag1_growth"] = df[COL_LAG1] * df["growth_rate"]
 
-    # Более умная стратегия заполнения пропусков
     if len(df) <= 2:
-        # Для коротких последовательностей используем текущее значение
         current_avg = df[COL_AVG_PULLUPS].iloc[-1]
 
-        # Заполняем лаги текущим значением, так как у нас недостаточно исторических данных
         df[COL_LAG1] = df[COL_LAG1].fillna(current_avg)
         df[COL_LAG2] = df[COL_LAG2].fillna(current_avg)
 
-        # Для темпа роста используем нейтральное значение (отсутствие роста)
         df["growth_rate"] = df["growth_rate"].fillna(0)
         df["lag1_growth"] = df["lag1_growth"].fillna(0)
     else:
-        # Для более длинных последовательностей используем интерполяцию
-
-        # Для лагов сначала используем ffill (forward fill), затем bfill (backward fill)
         df[COL_LAG1] = df[COL_LAG1].ffill().bfill()
         df[COL_LAG2] = df[COL_LAG2].ffill().bfill()
 
-        # Для темпа роста используем интерполяцию
         df["growth_rate"] = df["growth_rate"].interpolate(
             method="linear", limit_direction="both"
         )
@@ -164,11 +196,9 @@ def prepare_features(df: pd.DataFrame, sort_by_column: str = COL_DATE) -> pd.Dat
             method="linear", limit_direction="both"
         )
 
-    # Абсолютное изменение: используем интерполяцию вместо заполнения нулями
     df[COL_GROWTH] = df[COL_AVG_PULLUPS].diff()
     df[COL_GROWTH] = df[COL_GROWTH].interpolate(method="linear", limit_direction="both")
 
-    # Проверяем, остались ли NaN значения, и заполняем их медианой соответствующего столбца
     for col in [COL_LAG1, COL_LAG2, "growth_rate", "lag1_growth", COL_GROWTH]:
         if df[col].isna().any():
             df[col] = df[col].fillna(df[col].median())
@@ -176,10 +206,9 @@ def prepare_features(df: pd.DataFrame, sort_by_column: str = COL_DATE) -> pd.Dat
     return df
 
 
-@lru_cache(maxsize=32)
 def _get_cached_model_key(df_initial_json: str) -> str:
-    """Получить ключ для кэша модели."""
-    return f"{df_initial_json}"
+    timestamp = datetime.now().timestamp()
+    return f"{df_initial_json}_{timestamp}"
 
 
 def calculate_k1(max_pullups: int) -> float:
@@ -300,15 +329,9 @@ def _prepare_data_for_regression(
     # Если данных нет, используем сегодняшний день как стартовую точку для прогноза
     if len(df_2025_real) > 0:
         start_date_2025 = df_2025_real[COL_DATE].iloc[0]
-        logger.info(
-            f"Используется первая дата из данных пользователя как начальная точка прогноза: {start_date_2025.strftime('%d.%m.%Y')}"
-        )
     else:
         start_date_2025 = datetime.now().replace(
             hour=0, minute=0, second=0, microsecond=0
-        )
-        logger.info(
-            f"Данные пользователя отсутствуют. Используется текущая дата как начальная точка прогноза: {start_date_2025.strftime('%d.%m.%Y')}"
         )
 
     predict_year = start_date_2025.year
@@ -318,16 +341,10 @@ def _prepare_data_for_regression(
     df_initial[COL_DATE] = pd.to_datetime(df_initial[COL_DATE], format="%d.%m.%Y")
     if len(df_initial) > 0:
         start_date_initial = df_initial[COL_DATE].iloc[0]
-        logger.info(
-            f"Найдены начальные данные с первой датой: {start_date_initial.strftime('%d.%m.%Y')}"
-        )
     else:
         start_date_initial = datetime(
             2021, 7, 12
         )  # Используем стандартную дату, если нет начальных данных
-        logger.info(
-            f"Начальные данные отсутствуют. Используется стандартная дата: {start_date_initial.strftime('%d.%m.%Y')}"
-        )
 
     df_initial[COL_DAYS] = process_dates(df_initial[COL_DATE], start_date_initial)
     initial_year = start_date_initial.year
@@ -335,38 +352,43 @@ def _prepare_data_for_regression(
     # Создаем признаки с помощью универсальной функции
     df_initial = prepare_features(df_initial)
 
-    logger.info(
-        f"Подготовлены данные для регрессии. Количество записей: {len(df_initial)}"
-    )
-
     return df_initial, start_date_2025, initial_year, predict_year
 
 
 def _build_regression_model(initial_data_processed: pd.DataFrame) -> Pipeline:
-    """Построить модель регрессии."""
-    # Создаем ключ для кэша на основе данных и степени полинома
-    df_json = initial_data_processed.to_json()
-    cache_key = _get_cached_model_key(df_json)
+    """Построить модель регрессии с улучшенной стабильностью."""
+    
+    # Принудительно очищаем кэш моделей
+    MODEL_CACHE.clear()
 
-    cached_model = MODEL_CACHE.get(cache_key)
-    if cached_model is not None:
-        logger.info("Используется закешированная модель регрессии")
-        return cached_model
+    # Сначала выполним сглаживание данных с помощью скользящего среднего
+    # Уменьшаем окно сглаживания на этапе подготовки
+    smoothed_data = initial_data_processed.copy()
+    if len(smoothed_data) > 3:
+        smoothed_data[COL_AVG_PULLUPS] = smoothed_data[COL_AVG_PULLUPS].rolling(
+            window=min(2, len(smoothed_data)), 
+            min_periods=1,
+            center=True).mean()
+    
+    X_initial = smoothed_data[FEATURE_COLUMNS].to_numpy()
+    y_initial = smoothed_data[COL_AVG_PULLUPS].to_numpy()
 
-    logger.info("Создается новая модель регрессии")
-
-    X_initial = initial_data_processed[FEATURE_COLUMNS].to_numpy()
-    y_initial = initial_data_processed[COL_AVG_PULLUPS].to_numpy()
-
-    # Создаем пайплайн с предобработкой и RidgeCV для подбора оптимального alpha
-    alphas = np.arange(1, 1000.01, 0.1)  # От 0.01 до 1000 с шагом 0.1
+    # Используем более узкий диапазон значений alpha для более стабильной регуляризации
+    # Уменьшаем степень регуляризации для более гибкой модели
+    alphas = np.logspace(-2, 2, 20)  # Логарифмическая шкала от 0.01 до 100
+    
+    # Создаем улучшенный пайплайн с предобработкой и RidgeCV
     model = Pipeline(
         [
-            ("scaler", StandardScaler()),  # Добавляем StandardScaler
+            ("scaler", StandardScaler()),  # Масштабирование признаков
             (
                 "ridge_cv",
-                RidgeCV(alphas=alphas, store_cv_values=True),
-            ),  # RidgeCV с кросс-валидацией
+                RidgeCV(
+                    alphas=alphas,
+                    cv=min(5, len(smoothed_data)) if len(smoothed_data) > 3 else None,  # Используем CV только если достаточно данных
+                    scoring='neg_mean_squared_error'  # Метрика для оценки качества
+                ),
+            ),
         ]
     )
 
@@ -375,43 +397,50 @@ def _build_regression_model(initial_data_processed: pd.DataFrame) -> Pipeline:
 
     # Получаем оптимальное значение alpha
     best_alpha = model.named_steps["ridge_cv"].alpha_
-    logger.info(f"Найдено оптимальное значение alpha: {best_alpha:.3f}")
 
     # Создаем финальную модель с оптимальным alpha
     final_model = Pipeline(
         [
-            ("scaler", StandardScaler()),  # Добавляем StandardScaler
-            ("ridge", Ridge(alpha=best_alpha))
+            ("scaler", StandardScaler()),
+            ("ridge", Ridge(alpha=best_alpha)) 
         ]
     )
     final_model.fit(X_initial, y_initial)
 
-    logger.info("Модель регрессии обучена успешно")
-
-    # Сохраняем модель в кэш
-    MODEL_CACHE.set(cache_key, final_model)
     return final_model
 
 
-def _generate_prediction_days(forecast_days: int) -> np.ndarray:
-    """Генерирует массив дней для прогноза."""
-    return np.arange(0, forecast_days, FORECAST_INTERVAL)
+def _generate_prediction_days(
+    last_day_2025: int, forecast_days: int
+) -> np.ndarray:
+    """Генерирует массив дней для прогноза, начиная с последнего дня данных 2025 года.
+    
+    Args:
+        last_day_2025: Последний день данных 2025 года
+        forecast_days: Количество дней для прогноза
+        
+    Returns:
+        Массив дней для прогноза
+    """
+    # Генерируем дни с шагом 1, чтобы получить непрерывный прогноз
+    return np.arange(last_day_2025 + 1, last_day_2025 + forecast_days + 1, 1)
 
 
 def _get_historical_data(
     df_2025_real: pd.DataFrame, df_initial: pd.DataFrame
 ) -> pd.DataFrame:
     """Получает исторические данные для прогноза."""
-    historical_data = pd.DataFrame()
-
-    if not df_2025_real.empty:
-        # Используем реальные данные 2025 года
+    # ИЗМЕНЕНО: Возвращаем только данные 2025 года, если их достаточно
+    if len(df_2025_real) >= 2:
         historical_data = df_2025_real.copy()
+    else:
+        # Если данных 2025 года недостаточно, используем только исходные данные
+        historical_data = df_initial.copy()
 
     # Сортируем данные по дням
-    if not historical_data.empty:
-        historical_data = historical_data.sort_values(by="days")
-
+    if not historical_data.empty and COL_DAYS in historical_data.columns:
+        historical_data = historical_data.sort_values(by=COL_DAYS)
+        
     return historical_data
 
 
@@ -469,24 +498,32 @@ def _predict_next_value(
 
 def _make_predictions(
     model: Pipeline,
-    predict_days: np.ndarray,
     historical_data: pd.DataFrame,
-    progress_factor: float = 1.0,
-) -> tuple:
-    """Выполняет прогнозирование."""
+    predict_days: np.ndarray,
+) -> np.ndarray:
+    """Выполняет прогнозирование на основе исторических данных с улучшенной стабильностью."""
+    
     # Создаем признаки на основе исторических данных
     prepared_data = prepare_features(historical_data)
-
-    logger.info(
-        f"Начало прогнозирования на {len(predict_days)} дней с коэффициентом коррекции {progress_factor}"
-    )
+    
+    # Уменьшаем сглаживание исторических данных перед прогнозом
+    if len(prepared_data) > 3:
+        prepared_data[COL_AVG_PULLUPS] = prepared_data[COL_AVG_PULLUPS].rolling(
+            window=min(2, len(prepared_data)), 
+            min_periods=1, 
+            center=True).mean()
 
     # Получаем начальные значения признаков
     last_pullups, last_growth = _prepare_initial_features(prepared_data)
-
+    
     # Выполняем прогноз
     predicted_pullups = []
     inference_features = []
+    
+    # Увеличиваем максимальный прирост между последовательными предсказаниями
+    max_growth_per_day = 0.35  # Увеличиваем максимальный прирост в день (было 0.25)
+    
+    prev_prediction = last_pullups[-1]  # Последнее известное значение
 
     for i, day in enumerate(predict_days.tolist()):
         predicted_avg, features, last_pullups, last_growth = _predict_next_value(
@@ -495,51 +532,134 @@ def _make_predictions(
             last_pullups,
             last_growth,
         )
-
-        # Применяем коррекцию на основе прогресса пользователя
-        # Чем дальше в будущее, тем сильнее коррекция
-        if i > 0:  # Не корректируем первое значение
-            # Рассчитываем временную коррекцию (усиливается со временем)
-            time_factor = min(1.0, i / (len(predict_days) * 0.5))
-
-            # Применяем корректирующий множитель
-            correction = 1.0 + ((progress_factor - 1.0) * time_factor)
-
-            # Разница между текущим прогнозом и предыдущим значением
-            progress_diff = predicted_avg - predicted_pullups[-1]
-
-            # Корректируем только прирост, а не все значение
-            corrected_diff = progress_diff / correction
-
-            # Финальное скорректированное значение
-            predicted_avg = predicted_pullups[-1] + corrected_diff
-
+        
+        # Применяем более мягкое сглаживание для стабилизации прогноза
+        # Ограничиваем изменение предсказания относительно предыдущего
+        days_since_last = 1 if i == 0 else predict_days[i] - predict_days[i-1]
+        max_change = max_growth_per_day * days_since_last
+        
+        # Ограничиваем изменение предсказания с большим допуском
+        if predicted_avg - prev_prediction > max_change:
+            predicted_avg = prev_prediction + max_change
+        elif prev_prediction - predicted_avg > max_change and predicted_avg < prev_prediction:
+            predicted_avg = prev_prediction - max_change
+            
+        # Сохраняем сглаженное предсказание
         predicted_pullups.append(predicted_avg)
         inference_features.append(features)
+        
+        # Обновляем last_pullups и last_growth с учетом сглаженных значений
+        last_pullups = last_pullups[1:] + [predicted_avg]
+        last_growth = predicted_avg - prev_prediction
+        
+        # Обновляем предыдущее предсказание
+        prev_prediction = predicted_avg
 
-    logger.info(
-        f"Прогноз выполнен. Количество точек прогноза: {len(predicted_pullups)}"
-    )
+    # Уменьшаем финальное сглаживание для всего ряда предсказаний
+    if len(predicted_pullups) > 5:
+        smoothed_predictions = pd.Series(predicted_pullups).rolling(
+            window=min(2, len(predicted_pullups)),  # Уменьшаем окно сглаживания до 2 (было 3)
+            min_periods=1,
+            center=True
+        ).mean().to_numpy()
+        
+        # Гарантируем монотонность роста только если исходные данные показывают стабильный рост
+        if last_pullups[0] < last_pullups[-1] and last_pullups[-1] - last_pullups[0] > 1.5:  # Снижаем порог с 2 до 1.5
+            for i in range(1, len(smoothed_predictions)):
+                if smoothed_predictions[i] < smoothed_predictions[i-1]:
+                    # Уменьшаем силу коррекции монотонности еще больше
+                    smoothed_predictions[i] = 0.9 * smoothed_predictions[i] + 0.1 * smoothed_predictions[i-1]  # Было 0.8/0.2
+        
+        return smoothed_predictions
+    
     return np.array(predicted_pullups)
 
 
 def _forecast(
-    model: Pipeline,
+    model: Optional[Pipeline],
     df_2025_real: pd.DataFrame,
     df_initial: pd.DataFrame,
     forecast_days: int,
 ) -> tuple:
     """Выполняет полный процесс прогнозирования."""
+    # Создаем копии данных, чтобы избежать проблем с кэшированием pandas
+    df_2025_real = df_2025_real.copy(deep=True)
+    df_initial = df_initial.copy(deep=True)
+    
+    # Всегда используем исторические данные для обучения модели
+    model_source = "historical"  # Всегда используем исторические данные
+    
+    # Проверяем, передана ли модель или нужно создать новую
+    if model is None:
+        logger.info("Модель не предоставлена, создаем новую модель регрессии на исторических данных")
+        
+        # ИЗМЕНЕНО: Всегда строим модель на основе исторических данных,
+        # даже если есть достаточно данных 2025 года
+        if len(df_initial) > 0:
+            model = _build_regression_model(df_initial)
+            logger.info("Модель регрессии построена на основе исторических данных")
+        else:
+            logger.warning("Исторические данные отсутствуют, невозможно построить модель.")
+            # Возвращаем пустые массивы в случае ошибки
+            return np.array([]), np.array([]), model_source
+    
     # Генерируем дни для прогноза
-    predict_days = _generate_prediction_days(forecast_days)
+    last_day_2025 = 0
+    if not df_2025_real.empty:
+        # Если есть данные 2025, берем последний день как точку отсчета для прогноза
+        if COL_DAYS not in df_2025_real.columns:
+            # Если колонка COL_DAYS отсутствует, добавляем ее
+            if not pd.api.types.is_datetime64_any_dtype(df_2025_real[COL_DATE]):
+                df_2025_real[COL_DATE] = pd.to_datetime(df_2025_real[COL_DATE], format="%d.%m.%Y")
+            
+            start_date = df_2025_real[COL_DATE].iloc[0]
+            df_2025_real[COL_DAYS] = [(date - start_date).days for date in df_2025_real[COL_DATE]]
+            logger.info(f"Добавлен признак дней для данных 2025 года")
+        
+        last_day_2025 = df_2025_real[COL_DAYS].max()
+        logger.info(f"Последний день данных 2025: {last_day_2025}")
+    
+    # Используем обновленную функцию для генерации дней прогноза
+    predict_days = _generate_prediction_days(last_day_2025, forecast_days)
+    logger.info(f"Созданы дни для прогноза от {predict_days[0]} до {predict_days[-1]}, всего {len(predict_days)} дней")
 
-    # Получаем исторические данные
-    historical_data = _get_historical_data(df_2025_real, df_initial)
+    # КРИТИЧЕСКИЙ МОМЕНТ: Подготавливаем только данные 2025 года для прогнозирования
+    # Мы должны использовать только текущие данные пользователя для начальной точки прогноза
+    if len(df_2025_real) >= 2:
+        logger.info(f"Подготавливаем данные 2025 года ({len(df_2025_real)} записей) для прогнозирования")
+        
+        # Преобразуем данные 2025, чтобы они соответствовали формату для прогнозирования
+        if not pd.api.types.is_datetime64_any_dtype(df_2025_real[COL_DATE]):
+            df_2025_real[COL_DATE] = pd.to_datetime(df_2025_real[COL_DATE], format="%d.%m.%Y")
+            
+        # Убедимся, что у нас есть признак дней
+        if COL_DAYS not in df_2025_real.columns:
+            start_date = df_2025_real[COL_DATE].iloc[0]
+            df_2025_real[COL_DAYS] = [(date - start_date).days for date in df_2025_real[COL_DATE]]
+            logger.info(f"Добавлен признак дней для данных 2025 года")
+        
+        # Подготавливаем признаки для прогнозирования
+        historical_data = prepare_features(df_2025_real)
+        logger.info(f"Данные 2025 года подготовлены: {len(historical_data)} записей")
+        
+        # Логирование последней точки данных 2025 года - это будет началом прогноза
+        if not historical_data.empty:
+            last_row = historical_data.iloc[-1]
+            logger.info(f"Последняя точка 2025 года: день={last_row[COL_DAYS]}, подтягивания={last_row[COL_AVG_PULLUPS]}")
+    else:
+        # Если данных 2025 года недостаточно, используем только начальные данные для прогноза
+        logger.info(f"Недостаточно данных 2025 года, используем только начальные данные")
+        historical_data = df_initial.copy()
+        # Добавляем обработку признаков для исторических данных
+        historical_data = prepare_features(historical_data)
+        logger.info(f"Подготовлены только исторические данные: {len(historical_data)} записей")
 
-    # Выполняем прогнозирование с учетом коэффициента коррекции
-    predicted_pullups = _make_predictions(model, predict_days, historical_data)
-
-    return predict_days, predicted_pullups
+    logger.info(f"historical_data: {historical_data}")
+    # Выполняем прогнозирование с обновленным порядком аргументов
+    predicted_pullups = _make_predictions(model, historical_data, predict_days)
+    logger.info(f"Выполнен прогноз на {len(predicted_pullups)} точек")
+    
+    return predict_days, predicted_pullups, model_source
 
 
 def _calculate_achievement_dates(
@@ -630,8 +750,8 @@ def _create_chart2_data(
     """Создать данные для второго графика."""
 
     # Проверяем наличие данных пользователя
-    if df_2025_real.empty:
-        # Если данных нет, возвращаем специальное сообщение вместо графика
+    if df_2025_real.empty or len(df_2025_real) == 1:
+        # Если данных нет или есть только одно наблюдение, возвращаем специальное сообщение вместо графика
         return {
             "data": [],
             "standards": [],
@@ -639,7 +759,8 @@ def _create_chart2_data(
             "xAxisLabel": "Дата",
             "yAxisLabel": "Среднее количество подтягиваний",
             "noUserData": True,
-            "message": "Необходимо загрузить данные о ваших тренировках для построения персонального прогноза. Без данных прогноз невозможен.",
+            "message": "Необходимо загрузить данные о ваших тренировках для построения персонального прогноза. Для построения прогноза требуется минимум два наблюдения.",
+            "model_source": "historical",  # Добавляем информацию о модели
         }
 
     # Подготовка данных для графика
@@ -670,6 +791,7 @@ def _create_chart2_data(
             )
 
     # Добавляем прогнозные данные
+    added_prediction_points = 0
     for i, day in enumerate(predict_days.tolist()):
         date = (start_date_2025 + timedelta(days=int(day))).strftime("%Y-%m-%d")
         # Проверяем, нет ли уже точки с такой датой
@@ -681,8 +803,9 @@ def _create_chart2_data(
             existing_point["average"] = round(predicted_avg_pullups[i], 1)
             existing_point["maximum"] = max_pullups_no_weight_predicted[i]
             existing_point["withWeight"] = max_pullups_with_weight_predicted[i]
+            added_prediction_points += 1
         else:
-            # Если точки нет, создаем новую
+            # Если точек нет, создаем новую
             chart_data.append(
                 {
                     "date": date,
@@ -693,7 +816,8 @@ def _create_chart2_data(
                     "withWeight": max_pullups_with_weight_predicted[i],
                 }
             )
-
+            added_prediction_points += 1
+    
     # Сортируем данные по дням
     chart_data.sort(key=lambda x: x["day"])
 
@@ -735,6 +859,7 @@ def _create_chart2_data(
         "xAxisLabel": "Дата",
         "yAxisLabel": "Среднее количество подтягиваний",
         "noUserData": False,
+        "model_source": "historical",  # Явно указываем, что модель историческая
     }
 
 
@@ -743,16 +868,43 @@ async def get_prediction_data(
 ) -> dict:
     """Получить данные для прогноза."""
     try:
+        logger.info(f"=== НАЧАЛО ПРОГНОЗИРОВАНИЯ ===")
+        logger.info(f"Запрос прогноза для весовой категории: {weight_category}, на {forecast_days} дней")
+        
+        # Очищаем кэш моделей перед каждым запросом,
+        # чтобы гарантировать использование свежих данных
+        MODEL_CACHE.clear()
+        logger.info(f"Кэш моделей очищен")
+        
+        # Всегда загружаем свежие данные из файлов
+        logger.info(f"Загрузка данных из файлов...")
         (
             df_2025_real,
             df_initial,
             pullup_standards,
         ) = await _load_all_data(weight_category)
+        
+        logger.info(f"Данные загружены: {len(df_2025_real)} записей 2025, {len(df_initial)} записей начальных")
+        
+        # Принудительно сбрасываем кэш для используемых данных
+        df_2025_real = df_2025_real.copy(deep=True)
+        df_initial = df_initial.copy(deep=True)
+        logger.info(f"Данные скопированы для предотвращения проблем с кэшированием")
 
-        if df_2025_real.empty:
-            # Если данных пользователя нет, возвращаем сообщение без выполнения прогноза
+        # Подготовим данные для таблицы независимо от проверки на количество наблюдений
+        data_2025_prepared = []
+        for i in range(len(df_2025_real)):
+            data_2025_prepared.append(
+                TrainingData(
+                    date=pd.to_datetime(df_2025_real[COL_DATE].iloc[i]).strftime("%Y-%m-%d"),
+                    avg_pullups=df_2025_real[COL_AVG_PULLUPS].iloc[i],
+                )
+            )
+
+        if df_2025_real.empty or len(df_2025_real) == 1:
+            # Если данных пользователя нет или есть только одно наблюдение, возвращаем сообщение без выполнения прогноза
             logger.info(
-                "Данные пользователя отсутствуют. Прогноз не может быть построен."
+                "Данные пользователя отсутствуют или недостаточны для построения прогноза."
             )
 
             # Текущая дата для сообщения
@@ -769,11 +921,16 @@ async def get_prediction_data(
                 "xAxisLabel": "Дата",
                 "yAxisLabel": "Среднее количество подтягиваний",
                 "noUserData": True,
-                "message": "Необходимо загрузить данные о ваших тренировках для построения персонального прогноза. Без данных прогноз невозможен.",
+                "message": "Необходимо загрузить данные о ваших тренировках для построения персонального прогноза. Для построения прогноза требуется минимум два наблюдения.",
+                "model_source": "historical",  # Явно указываем источник модели
             }
 
-            return {
-                "data_2025": [],
+            # Сохраняем метку времени для предотвращения кэширования
+            timestamp = datetime.now().timestamp()
+            
+            # Формируем результат
+            result = {
+                "data_2025": data_2025_prepared,
                 "chart2": json.dumps(convert_to_json_serializable(chart2_data)),
                 "achievement_dates": {},
                 "pullup_standards": pullup_standards,
@@ -782,16 +939,32 @@ async def get_prediction_data(
                 "predict_year": predict_year,
                 "progress_type": "Недостаточно данных",
                 "growth_per_day": 0.0,
+                "timestamp": timestamp,  # Добавляем временную метку для предотвращения кэширования
+                "model_source": "historical",  # Явно указываем, что модель должна быть основана на исторических данных
             }
+            
+            # Логируем результаты для отладки
+            logger.info(f"Прогноз завершен успешно. Timestamp: {timestamp}")
+            logger.info(f"Отправка результата с {len(data_2025_prepared)} записями данных")
+            if chart2_data and "data" in chart2_data:
+                logger.info(f"График содержит {len(chart2_data['data'])} точек данных")
+            logger.info(f"=== КОНЕЦ ПРОГНОЗИРОВАНИЯ ===")
+            
+            return result
 
-        (df_initial, start_date_2025, initial_year, predict_year) = (
-            _prepare_data_for_regression(df_initial, df_2025_real)
+        # Подготавливаем данные и получаем необходимую информацию
+        df_initial, start_date_2025, initial_year, predict_year = _prepare_data_for_regression(df_initial, df_2025_real)
+        
+        # ИЗМЕНЕНИЕ: Не строим модель здесь, а передаем пустую модель в _forecast
+        # Там уже будет принято решение на основе каких данных строить модель
+        # это гарантирует, что если есть данные 2025, они будут использованы для модели
+        empty_model = None  # Пустая модель для передачи в _forecast
+        
+        # Вызываем _forecast - он сам решит, на каких данных построить модель
+        predict_days, predicted_avg_pullups, model_source = _forecast(
+            empty_model, df_2025_real, df_initial, forecast_days
         )
-        model = _build_regression_model(df_initial)
-
-        predict_days, predicted_avg_pullups = _forecast(
-            model, df_2025_real, df_initial, forecast_days
-        )
+        
         achievement_dates = _calculate_achievement_dates(
             predict_days,
             predicted_avg_pullups,
@@ -811,16 +984,30 @@ async def get_prediction_data(
             weight_category,
         )
 
-        data_2025_prepared = []
-        for i in range(len(df_2025_real)):
-            data_2025_prepared.append(
-                TrainingData(
-                    date=df_2025_real[COL_DATE].iloc[i].strftime("%Y-%m-%d"),
-                    avg_pullups=df_2025_real[COL_AVG_PULLUPS].iloc[i],
-                )
-            )
+        # Определяем тип прогресса на основе прироста
+        progress_type = "Умеренный"
+        growth_per_day = 0.0
 
-        return {
+        if len(predict_days) > 1:
+            days_diff = predict_days[-1] - predict_days[0]
+            if days_diff > 0:
+                avg_diff = predicted_avg_pullups[-1] - predicted_avg_pullups[0]
+                growth_per_day = avg_diff / days_diff
+                
+                if growth_per_day > 0.20:
+                    progress_type = "Быстрый"
+                elif growth_per_day > 0.10:
+                    progress_type = "Умеренный"
+                elif growth_per_day > 0.05:
+                    progress_type = "Медленный"
+                else:
+                    progress_type = "Очень медленный"
+
+        # Сохраняем метку времени для предотвращения кэширования
+        timestamp = datetime.now().timestamp()
+        
+        # Формируем результат
+        result = {
             "data_2025": data_2025_prepared,
             "chart2": json.dumps(convert_to_json_serializable(chart2_data)),
             "achievement_dates": achievement_dates,
@@ -828,7 +1015,21 @@ async def get_prediction_data(
             "forecast_days": forecast_days,
             "initial_year": initial_year,
             "predict_year": predict_year,
+            "progress_type": progress_type,
+            "growth_per_day": growth_per_day,
+            "timestamp": timestamp,  # Добавляем временную метку для предотвращения кэширования
+            "model_source": model_source,  # Передаем информацию об источнике модели
         }
+        
+        # Логируем результаты для отладки
+        logger.info(f"Прогноз завершен успешно. Timestamp: {timestamp}")
+        logger.info(f"Отправка результата с {len(data_2025_prepared)} записями данных")
+        if chart2_data and "data" in chart2_data:
+            logger.info(f"График содержит {len(chart2_data['data'])} точек данных")
+        logger.info(f"Источник модели: {model_source}")  # Логируем источник модели
+        logger.info(f"=== КОНЕЦ ПРОГНОЗИРОВАНИЯ ===")
+        
+        return result
 
     except DataError as e:
         logger.error(f"Error preparing prediction data: {e}")

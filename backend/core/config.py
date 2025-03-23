@@ -11,7 +11,7 @@ FORECAST_INTERVAL = 4
 
 # Настройки логирования
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-LOG_LEVEL = "DEBUG"
+LOG_LEVEL = "INFO"
 
 # Настройки API
 API_PREFIX = "/api/v1"
