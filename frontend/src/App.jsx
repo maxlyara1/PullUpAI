@@ -103,23 +103,15 @@ function App() {
             console.log(`Fetching data for: weight=${weightCategory}, days=${forecastDays}`);
             const result = await api.getPredictionData(weightCategory, forecastDays);
             setData(result.data_2025);
-            // Парсим JSON-строки из бэкенда
             const chart2DataObj = JSON.parse(result.chart2);
-            
-            // Добавляем информацию о прогрессе в объект chart2Data
+            // Добавляем только информацию о типе прогресса
             chart2DataObj.progress_type = result.progress_type;
-            chart2DataObj.growth_per_day = result.growth_per_day;
-            
+            // Удаляем: growth_per_day и regression_coeffs
+            // console.log('Growth per day:', result.growth_per_day);
+            console.log('Updated standards for weight category:', weightCategory);
             setChart2Data(chart2DataObj);
             setAchievementDates(result.achievement_dates);
             setPullupStandards(result.pullup_standards);
-            
-            console.log('Updated standards for weight category:', weightCategory);
-            console.log('Achievement dates:', result.achievement_dates);
-            console.log('Pullup standards:', result.pullup_standards);
-            console.log('Progress type:', result.progress_type);
-            console.log('Growth per day:', result.growth_per_day);
-
             setError('');
         } catch (error) {
             console.error("Error fetching data:", error);
@@ -322,11 +314,13 @@ function App() {
                             {chart2Data && (
                                 <>
                                     <div className={styles.chartWrapper}>
+                                        <div className={styles.chartHeader}>
+                                            <h3>Прогноз и фактические тренировки</h3>
+                                        </div>
                                         <ErrorBoundary>
                                             <Chart
                                                 data={chart2Data.data}
                                                 standards={chart2Data.standards}
-                                                title={chart2Data.title}
                                                 xAxisLabel={chart2Data.xAxisLabel}
                                                 yAxisLabel={chart2Data.yAxisLabel}
                                                 darkMode={isDarkMode}
@@ -389,31 +383,6 @@ function App() {
                                                 </div>
                                             </div>
                                         </div>
-                                        
-                                        {/* Блок с информацией о прогрессе пользователя */}
-                                        {chart2Data && chart2Data.progress_type && !chart2Data.noUserData && (
-                                            <div className={`${styles.explainerSection} ${styles.progressInfo}`}>
-                                                <h4>📈 Ваш прогресс</h4>
-                                                <div className={styles.progressDetails}>
-                                                    <div>
-                                                        <strong>Тип прогресса:</strong> 
-                                                        <span className={
-                                                            chart2Data.progress_type === "Быстрый" ? styles.fastProgress :
-                                                            chart2Data.progress_type === "Средний" ? styles.averageProgress :
-                                                            chart2Data.progress_type === "Медленный" ? styles.slowProgress :
-                                                            styles.verySlowProgress
-                                                        }>
-                                                            {chart2Data.progress_type}
-                                                        </span>
-                                                    </div>
-                                                    {chart2Data.growth_per_day !== undefined && (
-                                                        <div>
-                                                            <strong>Прирост в день:</strong> {chart2Data.growth_per_day.toFixed(3)} подтягиваний
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
                                     </div>
                                 </>
                             )}

@@ -1118,3 +1118,50 @@ input[type="date"]
   background-color: rgba(229, 62, 62, 0.1);
   margin-left: 4px;
 }
+
+.chartHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.chartHeader h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.coefficientsInfo {
+  display: inline-block;
+  margin-left: 8px;
+  background-color: var(--primary-color);
+  color: #fff;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  text-align: center;
+  line-height: 18px;
+  font-size: 12px;
+  cursor: default;
+}
+
+.modelInfo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 4px;
+  background-color: var(--bg-secondary);
+  cursor: help;
+  transition: background-color 0.2s;
+}
+
+.modelInfo:hover {
+  background-color: var(--bg-hover);
+}
+
+.modelInfoLabel {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
