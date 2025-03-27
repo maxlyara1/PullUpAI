@@ -27,31 +27,24 @@ class ApiError extends Error {
 }
 
 //  Функция для получения данных для прогноза
-export const getPredictionData = async (weightCategory, forecastDays) => {
+export const getPredictionData = async (weightCategory, forecastDays, timestamp = new Date().getTime()) => {
     try {
-        // Генерируем уникальный идентификатор запроса для гарантированного предотвращения кэширования
-        const uniqueId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-        const timestamp = new Date().getTime();
-        
-        console.log(`API Request: генерация уникального ID запроса: ${uniqueId}_${timestamp}`);
+        // Используем переданный timestamp для более эффективного кэш-бастинга
+        console.log(`API Request: Запрос прогноза с параметрами: вес=${weightCategory}, дни=${forecastDays}, timestamp=${timestamp}`);
         
         const response = await axios.get(`${API_BASE_URL}/prediction`, {
             params: { 
                 weight_category: weightCategory, 
                 forecast_days: forecastDays,
-                cache_breaker: `${uniqueId}_${timestamp}`,  // Добавляем случайное значение и timestamp
-                random: Math.random()  // Дополнительный параметр для предотвращения кэширования
+                t: timestamp  // Упрощенный параметр для предотвращения кэширования
             },
             headers: {
                 'Cache-Control': 'no-cache, no-store, must-revalidate',
                 'Pragma': 'no-cache',
-                'Expires': '0',
-                'If-Modified-Since': new Date(0).toUTCString(), // Заставляет игнорировать кэширование на уровне браузера
-                'X-Requested-With': timestamp  // Добавляем timestamp в заголовки
+                'Expires': '0'
             }
         });
         
-        console.log('API Response received:', response.status);
         return response.data;
     } catch (error) {
         if (error.response) {

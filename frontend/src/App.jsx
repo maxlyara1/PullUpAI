@@ -47,7 +47,7 @@ function App() {
     const [weightCategory, setWeightCategory] = useState(() => getSavedValue('weightCategory', 'до 75'));
     const [forecastDays, setForecastDays] = useState(() => getSavedValue('forecastDays', 90));
     const [availableWeightCategories, setAvailableWeightCategories] = useState([]);
-    const [achievementDates, setAchievementDates] = useState({});
+    const [achievementDates, setAchievementDates] = useState(() => getSavedValue('achievementDates', {}));
     const [pullupStandards, setPullupStandards] = useState({});
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
@@ -99,71 +99,57 @@ function App() {
         };
     }, []);
 
+    // Без ESLint-disable, так как мы исправим проблему правильно
     const updateData = useCallback(async () => {
         setLoading(true);
         try {
             console.log(`Fetching data for: weight=${weightCategory}, days=${forecastDays}`);
             const timestamp = new Date().getTime();
-            console.log(`Добавлен timestamp для предотвращения кэширования: ${timestamp}`);
             
-            // Сначала сбрасываем данные графика, чтобы гарантировать, что старые данные не будут использоваться
-            setChart2Data(null);
-            console.log('Состояние chart2Data сброшено перед запросом новых данных');
+            // Не сбрасываем данные графика до получения новых данных
+            // Это позволит избежать "мигания" интерфейса
             
-            // Принудительно вызываем сборку мусора, чтобы очистить все возможные кэшированные ссылки
-            // (это нестандартная практика, но может помочь в сложных случаях с кэшированием)
-            setTimeout(() => {
-                // Делаем запрос к API только после сброса предыдущего состояния
-                (async () => {
-                    try {
-                        const result = await api.getPredictionData(weightCategory, forecastDays);
-                        console.log('Получены новые данные от сервера:', result);
-                        
-                        // Устанавливаем данные таблицы
-                        setData(result.data_2025);
-                        console.log('Обновлены данные таблицы:', result.data_2025);
-                        
-                        // Обрабатываем данные графика
-                        const chart2DataObj = JSON.parse(result.chart2);
-                        chart2DataObj.progress_type = result.progress_type;
-                        // Добавляем информацию о источнике данных для модели
-                        chart2DataObj.model_source = result.model_source || "historical";
-                        console.log('Источник данных для модели:', chart2DataObj.model_source);
-                        
-                        // Проверка наличия данных для графика
-                        console.log('Новые данные для графика:', chart2DataObj);
-                        if (chart2DataObj.data && chart2DataObj.data.length > 0) {
-                            console.log(`Получено ${chart2DataObj.data.length} точек для графика`);
-                            console.log('Пример данных графика:', chart2DataObj.data[0]);
-                        } else {
-                            console.warn('Пустые данные для графика!');
-                        }
-                        
-                        // Обновляем состояние данных графика с уникальным идентификатором
-                        chart2DataObj._uniqueId = timestamp;
-                        setChart2Data(chart2DataObj);
-                        console.log(`Установлены новые данные графика с уникальным ID: ${timestamp}`);
-                        
-                        // Обновляем даты достижения разрядов
-                        console.log('Новые даты достижения разрядов:', result.achievement_dates);
-                        setAchievementDates(result.achievement_dates);
-                        
-                        // Обновляем стандарты подтягиваний
-                        setPullupStandards(result.pullup_standards);
-                        
-                        // Сохраняем метку времени в консоли
-                        console.log(`Данные успешно обновлены в ${new Date().toLocaleTimeString()}`);
-                        
-                        setError('');
-                    } catch (error) {
-                        console.error("Error fetching data:", error);
-                        setError(error.message || 'Произошла ошибка при загрузке данных.');
-                    } finally {
-                        setLoading(false);
-                        if (isInitialLoad) setIsInitialLoad(false);
-                    }
-                })();
-            }, 100); // Небольшая задержка для обработки React-обновлений состояния
+            // Делаем запрос к API напрямую с добавлением кэш-бастинга
+            try {
+                const result = await api.getPredictionData(weightCategory, forecastDays, timestamp);
+                
+                // Проверяем наличие данных в ответе
+                if (!result || !result.chart2) {
+                    console.error("Ошибка: Не получены данные графика");
+                    setError('Не удалось получить данные графика');
+                    setLoading(false);
+                    return;
+                }
+                
+                // Обрабатываем данные графика
+                const chart2DataObj = JSON.parse(result.chart2);
+                chart2DataObj.progress_type = result.progress_type;
+                chart2DataObj.model_source = result.model_source || "historical";
+                
+                // Добавляем уникальный идентификатор для предотвращения кэширования
+                chart2DataObj._uniqueId = timestamp;
+                
+                // Устанавливаем данные таблицы и графика в одном батче для уменьшения перерендеров
+                setData(result.data_2025); 
+                setChart2Data(chart2DataObj);
+                
+                // Сохраняем новые достижения в глобальной переменной для использования в useEffect
+                window._newAchievementDates = result.achievement_dates;
+                window._newStandards = result.pullup_standards;
+                
+                // Если установлен флаг на обновление достижений, установим специальную метку
+                if (localStorage.getItem('shouldUpdateAchievementDates') === 'true') {
+                    window._forceUpdateAchievements = true;
+                }
+                
+                setError('');
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                setError(error.message || 'Произошла ошибка при загрузке данных.');
+            } finally {
+                setLoading(false);
+                if (isInitialLoad) setIsInitialLoad(false);
+            }
         } catch (error) {
             console.error("Error in update flow:", error);
             setError(error.message || 'Произошла ошибка при обновлении данных.');
@@ -171,6 +157,49 @@ function App() {
             if (isInitialLoad) setIsInitialLoad(false);
         }
     }, [weightCategory, forecastDays, isInitialLoad]);
+
+    // Добавляем отдельный useEffect для обработки данных достижений
+    useEffect(() => {
+        const updateAchievementDates = () => {
+            // Проверяем наличие новых данных
+            if (!window._newAchievementDates) return;
+            
+            // Получаем флаг необходимости обновления
+            const shouldUpdate = window._forceUpdateAchievements || localStorage.getItem('shouldUpdateAchievementDates') === 'true';
+            
+            if (shouldUpdate) {
+                // Обновляем даты достижений и сбрасываем флаг
+                setAchievementDates(window._newAchievementDates);
+                localStorage.setItem('achievementDates', JSON.stringify(window._newAchievementDates));
+                localStorage.setItem('shouldUpdateAchievementDates', 'false');
+                window._forceUpdateAchievements = false;
+                console.log('Даты достижений обновлены и сохранены в localStorage');
+            } else {
+                // Проверяем, есть ли сохраненные даты в localStorage
+                const savedDates = localStorage.getItem('achievementDates');
+                
+                // Если даты не сохранены, сохраняем новые
+                if (!savedDates) {
+                    localStorage.setItem('achievementDates', JSON.stringify(window._newAchievementDates));
+                    setAchievementDates(window._newAchievementDates);
+                    console.log('Даты достижений инициализированы и сохранены в localStorage');
+                }
+                // В противном случае оставляем текущие даты без изменений
+            }
+            
+            // Обновляем стандарты в любом случае
+            if (window._newStandards) {
+                setPullupStandards(window._newStandards);
+            }
+            
+            // Очищаем временные переменные
+            window._newAchievementDates = null;
+            window._newStandards = null;
+        };
+        
+        // Вызываем функцию обновления
+        updateAchievementDates();
+    }, [chart2Data]); // Зависимость от chart2Data гарантирует, что обработка будет после обновления графика
 
     useEffect(() => {
         updateData();
@@ -197,6 +226,10 @@ function App() {
             await api.addData(newData);
             console.log('Данные успешно добавлены на сервер');
             
+            // Установка флага для обновления дат достижений при следующем вызове updateData
+            localStorage.setItem('shouldUpdateAchievementDates', 'true');
+            console.log('Установлен флаг для обновления дат достижений');
+            
             // Добавляем небольшую задержку перед обновлением данных
             // чтобы убедиться, что сервер успел обработать запрос
             console.log('Ожидание 500мс перед запросом обновленных данных...');
@@ -213,6 +246,9 @@ function App() {
     const handleDeleteData = async (index) => {
         try {
             await api.deleteData(index);
+            // Установка флага для обновления дат достижений при следующем вызове updateData
+            localStorage.setItem('shouldUpdateAchievementDates', 'true');
+            console.log('Установлен флаг для обновления дат достижений после удаления');
             await updateData();
         } catch (error) {
             console.error("Error deleting data:", error);
@@ -226,7 +262,15 @@ function App() {
         if (!confirmReset) return;
         
         try {
+            // Сбрасываем данные на сервере
             await api.resetData();
+            
+            // Сбрасываем кэш достижений в localStorage и устанавливаем флаг обновления
+            localStorage.removeItem('achievementDates');
+            localStorage.setItem('shouldUpdateAchievementDates', 'true');
+            console.log('Кэш достижений сброшен, установлен флаг для обновления дат');
+            
+            // Перезагружаем данные
             await updateData();
         } catch (error) {
             console.error("Error resetting data:", error);
@@ -302,7 +346,7 @@ function App() {
                                 </h2>
                                 <table 
                                     className={styles.achievementsTable}
-                                    key={`achievements-${new Date().getTime()}`}
+                                    key="achievements-table"
                                 >
                                     <thead>
                                         <tr>
@@ -318,17 +362,35 @@ function App() {
                                             let achievementEmoji = "🎯";
                                             
                                             if (typeof days === "number") {
-                                                const startDate = data && data.length > 0 
-                                                    ? new Date(data[0].date) 
-                                                    : new Date(new Date().getFullYear() + 1, 0, 14);
-                                                let date = new Date(startDate);
-                                                date.setDate(startDate.getDate() + days);
-                                                predictedDate = format(date, "dd.MM.yyyy", { locale: ru });
+                                                // Используем первую дату из данных (фактическую дату начала)
+                                                // но гарантируем, что эта дата будет стабильной при изменении forecastDays
+                                                let startDate;
                                                 
-                                                // Проверяем, достигнут ли разряд
-                                                const today = new Date();
-                                                if (date <= today) {
+                                                if (days === 0) {
+                                                    // Если разряд уже достигнут (days = 0)
+                                                    predictedDate = "Уже достигнуто";
                                                     achievementEmoji = "🏆";
+                                                } else if (data && data.length > 0) {
+                                                    // Находим первую запись с фактическими данными (без прогноза)
+                                                    // и используем её дату как стартовую точку для расчетов
+                                                    startDate = new Date(data[0].date);
+                                                    
+                                                    // Копируем дату для предотвращения мутаций
+                                                    let date = new Date(startDate);
+                                                    date.setDate(startDate.getDate() + days);
+                                                    predictedDate = format(date, "dd.MM.yyyy", { locale: ru });
+                                                    
+                                                    // Проверяем, достигнут ли разряд
+                                                    const today = new Date();
+                                                    if (date <= today) {
+                                                        achievementEmoji = "🏆";
+                                                    }
+                                                } else {
+                                                    // Фоллбэк, если нет данных (маловероятно)
+                                                    startDate = new Date(new Date().getFullYear(), 0, 14);
+                                                    let date = new Date(startDate);
+                                                    date.setDate(startDate.getDate() + days);
+                                                    predictedDate = format(date, "dd.MM.yyyy", { locale: ru });
                                                 }
                                             }
 
@@ -388,7 +450,7 @@ function App() {
                                         </div>
                                         <ErrorBoundary>
                                             <Chart
-                                                key={`chart-${chart2Data?._uniqueId || new Date().getTime()}`}
+                                                key={`chart-${chart2Data._uniqueId}`}
                                                 data={chart2Data.data}
                                                 standards={chart2Data.standards}
                                                 xAxisLabel={chart2Data.xAxisLabel}
@@ -396,7 +458,7 @@ function App() {
                                                 darkMode={isDarkMode}
                                                 noUserData={chart2Data.noUserData || false}
                                                 message={chart2Data.message || ''}
-                                                timestamp={chart2Data?._uniqueId || new Date().getTime()}
+                                                timestamp={chart2Data._uniqueId}
                                             />
                                         </ErrorBoundary>
                                     </div>

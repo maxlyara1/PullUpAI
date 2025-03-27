@@ -234,27 +234,30 @@ const ChartComponent = ({ data, standards, title, xAxisLabel, yAxisLabel, darkMo
   );
 };
 
-// Функция сравнения для React.memo, предотвращающая кэширование компонента
-// Возвращает false, чтобы всегда перерисовывать компонент при обновлении данных
+// В конце файла изменим функцию проверки обновления
 function arePropsEqual(prevProps, nextProps) {
-  // Если есть данные для графика, всегда обновляем компонент
+  // Сравнение timestamp - если они равны, то данные не изменились
+  if (prevProps.timestamp === nextProps.timestamp) {
+    return true; // Пропускаем обновление, если timestamp не изменился
+  }
+
+  // Проверяем только важные изменения, игнорируя незначительные
   if (nextProps.data && nextProps.data.length > 0) {
-    console.log('Chart will re-render because data is present');
-    return false; // Возвращает false для перерисовки компонента
+    // Всегда обновляем при наличии данных и разных timestamp
+    return false;
   }
   
-  // Для режима без данных пользователя, используем стандартное сравнение
+  // Для режима без данных пользователя, используем оптимизированное сравнение
   if (nextProps.noUserData) {
     const equalProps = (
       prevProps.noUserData === nextProps.noUserData &&
       prevProps.message === nextProps.message &&
       prevProps.darkMode === nextProps.darkMode
     );
-    console.log('Chart in noUserData mode, will re-render:', !equalProps);
     return equalProps;
   }
   
-  // В других случаях всегда обновляем
+  // В других случаях по умолчанию обновляем
   return false;
 }
 

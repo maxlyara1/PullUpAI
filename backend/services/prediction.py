@@ -722,17 +722,23 @@ def _calculate_achievement_dates(
         if len(indices) > 0:
             # Найден день достижения стандарта
             first_index = indices[0]
+            # Используем абсолютное значение дня для предотвращения зависимости от forecast_days
             achievement_dates[rank] = int(predict_days[first_index])
         elif progress_per_day > 0:
             # Экстраполируем, если есть положительный прогресс
             days_to_target = (
                 max_pullups_with_weight_standard - last_value
             ) / progress_per_day
+            # Используем абсолютное значение при экстраполяции
+            # Это значение не должно зависеть от forecast_days
             achievement_dates[rank] = int(predict_days[-1] + days_to_target)
         else:
             # Стандарт не будет достигнут в прогнозируемом периоде
             achievement_dates[rank] = None
 
+    # Логируем рассчитанные даты достижения для отладки
+    logger.debug(f"Рассчитанные даты достижения разрядов: {achievement_dates}")
+    
     return achievement_dates
 
 
